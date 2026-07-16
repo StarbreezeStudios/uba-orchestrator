@@ -37,4 +37,4 @@ Start UBA with `-coordinator=Orchestrator`. The bridge must be deployed as `UbaC
 
 ## Current MVP boundaries
 
-This path supports one initiator and one or more idle helpers, no authentication, in-memory leases, and one UBA agent per helper. The native bridge still needs to be compiled and tested in the UE 5.6 Perforce workspace before Jenkins can use it for a real Unreal build.
+This path supports one initiator and one or more idle helpers, no authentication, in-memory leases, and one UBA agent per helper. The native bridge still needs to be compiled and tested in the UE 5.6 Perforce workspace before Jenkins can use it for a real Unreal build. Follow `docs/integration.md` for the source-to-Engine mapping; do not copy the Git repository as one nested source directory.
