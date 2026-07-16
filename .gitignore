@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+
+# Runtime files
+logs/
+*.log
+*.db
+*.sqlite3
+.env
+
+# Native build output
+Binaries/
+Intermediate/
+.vs/
+*.sln
+*.vcxproj
+*.user
+
+# macOS / editors
+.DS_Store
+.idea/
+.vscode/

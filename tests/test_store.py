@@ -1,0 +1,26 @@
+import sys
+import unittest
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parents[1] / "orchestrator"))
+
+from app.store import Store
+
+
+class StoreTests(unittest.TestCase):
+    def test_lease_selects_idle_capacity_and_release_returns_helper_to_idle(self):
+        store = Store()
+        helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8, "listen_port": 1346})
+        lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                    "initiator_port": 1345, "target_core_count": 4})
+        self.assertIsNotNone(lease)
+        self.assertEqual(store.helpers[helper.helper_id].state, "reserved")
+        store.release_lease(lease.lease_id)
+        self.assertEqual(store.helpers[helper.helper_id].state, "idle")
+
+
+    def test_lease_is_not_created_when_capacity_is_insufficient(self):
+        store = Store()
+        store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 2})
+        self.assertIsNone(store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                               "initiator_port": 1345, "target_core_count": 4}))
