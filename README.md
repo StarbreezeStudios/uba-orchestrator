@@ -27,3 +27,5 @@ PYTHONPATH=orchestrator python -m unittest discover -s tests -v
 ```
 
 The native bridge is compiled later from the UE 5.6/UBA Perforce integration workspace and packaged beside the UBA binaries.
+
+See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup sequence.

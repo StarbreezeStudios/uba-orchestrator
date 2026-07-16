@@ -19,6 +19,20 @@ namespace
         return length ? std::wstring(value, length) : L"http://127.0.0.1:8080";
     }
 
+    std::string GetInitiatorAddress()
+    {
+        char value[256] = {};
+        DWORD length = GetEnvironmentVariableA("UBA_INITIATOR_ADDRESS", value, sizeof(value));
+        return length ? std::string(value, length) : "127.0.0.1";
+    }
+
+    unsigned GetInitiatorPort()
+    {
+        char value[32] = {};
+        DWORD length = GetEnvironmentVariableA("UBA_INITIATOR_PORT", value, sizeof(value));
+        return length ? unsigned(std::strtoul(value, nullptr, 10)) : 1345u;
+    }
+
     bool Request(const std::wstring& method, const std::wstring& path, const std::string& body, std::string& response)
     {
         URL_COMPONENTS components{};
@@ -97,7 +111,7 @@ namespace
             if (m_lease.empty())
             {
                 std::string response;
-                std::string body = "{\"initiator_id\":\"uba-initiator\",\"initiator_address\":\"127.0.0.1\",\"initiator_port\":1345,\"target_core_count\":" + std::to_string(count) + "}";
+                std::string body = "{\"initiator_id\":\"uba-initiator\",\"initiator_address\":\"" + GetInitiatorAddress() + "\",\"initiator_port\":" + std::to_string(GetInitiatorPort()) + ",\"target_core_count\":" + std::to_string(count) + "}";
                 if (!Request(L"POST", L"/api/v1/leases", body, response)) return;
                 m_lease = JsonString(response, "lease_id");
                 if (m_lease.empty()) return;

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from threading import Lock
+from threading import RLock
 from uuid import uuid4
 
 
@@ -41,7 +41,7 @@ class Lease:
 
 class Store:
     def __init__(self) -> None:
-        self.lock = Lock()
+        self.lock = RLock()
         self.helpers: dict[str, Helper] = {}
         self.leases: dict[str, Lease] = {}
 
