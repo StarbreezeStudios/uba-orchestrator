@@ -53,7 +53,7 @@ namespace
         HINTERNET request = connection ? WinHttpOpenRequest(connection, method.c_str(), path.c_str(), nullptr,
                                                               WINHTTP_NO_REFERER, WINHTTP_DEFAULT_ACCEPT_TYPES,
                                                               components.nScheme == INTERNET_SCHEME_HTTPS ? WINHTTP_FLAG_SECURE : 0) : nullptr;
-        bool ok = request && WinHttpSendRequest(request, L"Content-Type: application/json\r\n", -1,
+        bool ok = request && WinHttpSendRequest(request, L"Content-Type: application/json\r\n", DWORD(-1),
                                                  body.empty() ? WINHTTP_NO_REQUEST_DATA : (LPVOID)body.data(),
                                                  (DWORD)body.size(), (DWORD)body.size(), 0) && WinHttpReceiveResponse(request, nullptr);
         if (ok)
