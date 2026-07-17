@@ -30,4 +30,6 @@ The native bridge is compiled later from the UE 5.6/UBA Perforce integration wor
 
 See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup sequence.
 
+When the service is running, open `/ui` for the local operations dashboard. It shows registered helpers and active initiator leases; the tables refresh every three seconds.
+
 The MVP store is intentionally in-memory. A service restart clears helper registrations and leases, so persistence and restart reconciliation are required before this becomes shared production infrastructure. See [docs/deployment-helsinki.md](docs/deployment-helsinki.md) for the current Docker deployment and its limitations.

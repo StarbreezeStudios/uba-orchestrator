@@ -35,3 +35,18 @@ class StoreTests(unittest.TestCase):
         store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
         self.assertEqual(store.lease_view(lease.lease_id)["state"], "active")
         self.assertGreater(store.leases[lease.lease_id].expires_at, initial_expiry)
+
+    def test_diagnostics_list_helpers_and_initiators(self):
+        store = Store()
+        helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+        lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                    "initiator_port": 1345, "target_core_count": 4})
+
+        helpers = store.list_helpers()
+        initiators = store.list_initiators()
+
+        self.assertEqual(len(helpers), 1)
+        self.assertEqual(helpers[0]["helper_id"], helper.helper_id)
+        self.assertEqual(len(initiators), 1)
+        self.assertEqual(initiators[0]["lease_id"], lease.lease_id)
+        self.assertEqual(initiators[0]["helpers"][0]["hostname"], "helper-1")

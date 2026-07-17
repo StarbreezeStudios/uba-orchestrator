@@ -141,8 +141,46 @@ class Store:
                     "helpers": [{"helper_id": h.helper_id, "address": h.address, "port": h.listen_port,
                                   "agent_ready": h.agent_ready, "cores": h.cores} for h in helpers]}
 
+    def list_helpers(self) -> list[dict]:
+        with self.lock:
+            self.reap()
+            return [self.helper_view(helper) for helper in self.helpers.values()]
+
+    def list_initiators(self) -> list[dict]:
+        with self.lock:
+            self.reap()
+            active_leases = [
+                lease for lease in self.leases.values()
+                if lease.state not in ("released", "expired")
+            ]
+            return [self.initiator_view(lease) for lease in active_leases]
+
     @staticmethod
     def helper_view(helper: Helper) -> dict:
         result = asdict(helper)
         result["last_seen"] = helper.last_seen.isoformat()
         return result
+
+    def initiator_view(self, lease: Lease) -> dict:
+        return {
+            "initiator_id": lease.initiator_id,
+            "address": lease.initiator_address,
+            "port": lease.initiator_port,
+            "lease_id": lease.lease_id,
+            "state": lease.state,
+            "target_core_count": lease.target_core_count,
+            "last_seen": lease.last_seen.isoformat(),
+            "expires_at": lease.expires_at.isoformat(),
+            "helpers": [
+                {
+                    "helper_id": helper.helper_id,
+                    "hostname": helper.hostname,
+                    "address": helper.address,
+                    "port": helper.listen_port,
+                    "cores": helper.cores,
+                    "state": helper.state,
+                    "agent_ready": helper.agent_ready,
+                }
+                for helper in (self.helpers[helper_id] for helper_id in lease.helper_ids)
+            ],
+        }

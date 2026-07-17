@@ -27,6 +27,8 @@ Expected health response:
 {"status":"ok"}
 ```
 
+The operations dashboard is available at `http://helsinki:8080/ui`. It displays helper registration/state and active initiator leases. The underlying diagnostic endpoints are `/api/v1/helpers` and `/api/v1/initiators`.
+
 To follow logs:
 
 ```bash
