@@ -1,9 +1,10 @@
---- Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
-+++ Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
+--- a/Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
++++ b/Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
 @@ -117,18 +117,61 @@
                         XmlConfig.ApplyTo(UBAConfig);
                         CommandLine.ParseArguments(Environment.GetCommandLineArgs(), this, logger);
-
+-
++
 -                       List<UBAAgentCoordinatorHorde> hordeAgentCoordinators = new();
 -                       foreach (TargetDescriptor targetDescriptor in targetDescriptors)
 -                       {
@@ -71,6 +72,7 @@
 +        _agentCoordinators.AddRange(
 +                hordeAgentCoordinators.DistinctBy(x => x.Server));
 +}
-
-                        _threadedLogger = new ThreadedLogger(logger);
+-
++
+                       _threadedLogger = new ThreadedLogger(logger);
                 }
