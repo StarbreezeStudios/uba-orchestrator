@@ -1,0 +1,76 @@
+--- Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
++++ Engine/Source/Programs/UnrealBuildTool/Executors/UnrealBuildAccelerator/UBAExecutor.cs
+@@ -117,18 +117,61 @@
+                        XmlConfig.ApplyTo(UBAConfig);
+                        CommandLine.ParseArguments(Environment.GetCommandLineArgs(), this, logger);
+
+-                       List<UBAAgentCoordinatorHorde> hordeAgentCoordinators = new();
+-                       foreach (TargetDescriptor targetDescriptor in targetDescriptors)
+-                       {
+-                               if (targetDescriptor.HotReloadMode != HotReloadMode.Disabled)
+-                                       UBAConfig.bStoreObjFilesCompressed = false;
+-                               targetDescriptor.AdditionalArguments.ApplyTo(this);
+-                               targetDescriptor.AdditionalArguments.ApplyTo(UBAConfig);
+-                               hordeAgentCoordinators.Add(new UBAAgentCoordinatorHorde(logger, UBAConfig, targetDescriptor.AdditionalArguments, targetDescriptor.ProjectFile?.Directory));
+-                       }
+-                       hordeAgentCoordinators.RemoveAll(x => !x.Enabled);
+-                       _remoteConnectionMode = hordeAgentCoordinators.FirstOrDefault()?.ConnectionModeString ?? "Local";
+-                       _agentCoordinators.AddRange(hordeAgentCoordinators.DistinctBy(x => x.Server));
++bool useOrchestrator = String.Equals(
++        Environment.GetEnvironmentVariable("UBA_COORDINATOR"),
++        "Orchestrator",
++        StringComparison.OrdinalIgnoreCase);
++
++List<UBAAgentCoordinatorHorde> hordeAgentCoordinators = new();
++bool orchestratorAdded = false;
++
++foreach (TargetDescriptor targetDescriptor in targetDescriptors)
++{
++        if (targetDescriptor.HotReloadMode != HotReloadMode.Disabled)
++                UBAConfig.bStoreObjFilesCompressed = false;
++
++        targetDescriptor.AdditionalArguments.ApplyTo(this);
++        targetDescriptor.AdditionalArguments.ApplyTo(UBAConfig);
++
++        if (useOrchestrator)
++        {
++                if (!orchestratorAdded)
++                {
++                        _agentCoordinators.Add(
++                                new UBAAgentCoordinatorOrchestrator(
++                                        logger,
++                                        UBAConfig,
++                                        targetDescriptor.AdditionalArguments,
++                                        targetDescriptor.ProjectFile?.Directory));
++
++                        orchestratorAdded = true;
++                }
++        }
++        else
++        {
++                hordeAgentCoordinators.Add(
++                        new UBAAgentCoordinatorHorde(
++                                logger,
++                                UBAConfig,
++                                targetDescriptor.AdditionalArguments,
++                                targetDescriptor.ProjectFile?.Directory));
++        }
++}
++
++if (useOrchestrator)
++{
++        _remoteConnectionMode = "Direct";
++}
++else
++{
++        hordeAgentCoordinators.RemoveAll(x => !x.Enabled);
++        _remoteConnectionMode =
++                hordeAgentCoordinators.FirstOrDefault()?.ConnectionModeString ??
++                "Local";
++
++        _agentCoordinators.AddRange(
++                hordeAgentCoordinators.DistinctBy(x => x.Server));
++}
+
+                        _threadedLogger = new ThreadedLogger(logger);
+                }
