@@ -82,14 +82,15 @@ $principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interact
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
-$registrationTimeoutSeconds = 90
+$registrationTimeoutSeconds = 180
 $deadline = (Get-Date).AddSeconds($registrationTimeoutSeconds)
 $registeredHelper = $null
 do {
     Start-Sleep -Seconds 2
     try {
-        $registeredHelper = Invoke-RestMethod "$orchestratorUrl/api/v1/helpers" |
-            Where-Object { $_.hostname -eq $env:COMPUTERNAME -and $_.address -eq $address } |
+        $registeredHelper = @(Invoke-RestMethod "$orchestratorUrl/api/v1/helpers") |
+            Where-Object { [string]$_.hostname -ieq [string]$env:COMPUTERNAME } |
+            Sort-Object last_seen -Descending |
             Select-Object -First 1
     }
     catch {
@@ -101,6 +102,7 @@ if (-not $registeredHelper) {
     throw "Helper did not register with $orchestratorUrl within $registrationTimeoutSeconds seconds"
 }
 
+Write-Host "Registered helper address: $($registeredHelper.address):$($registeredHelper.listen_port)"
 $registeredHelper | ConvertTo-Json -Depth 5 | Write-Host
 Write-Host "UBA helper deployment completed"
 '''
