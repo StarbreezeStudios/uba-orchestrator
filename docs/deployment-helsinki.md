@@ -39,7 +39,7 @@ docker compose -f deploy/docker/compose.yaml logs -f uba-orchestrator
 
 `deploy/jenkins/deploy.groovy` runs directly on the Jenkins node labeled `helsinki`. The Jenkins job supplies the repository URL and branch through its SCM configuration; the pipeline itself has no deployment parameters.
 
-The pipeline runs `docker compose up -d --build --force-recreate` from the Jenkins workspace and checks the local health endpoint. The node must have Docker, the Compose plugin, and permission to run Docker Compose. It does not submit Perforce changes, manage Windows helpers, or expose the service through a proxy.
+The pipeline runs `docker compose up -d --build --force-recreate` from the Jenkins workspace and waits up to 60 seconds for the local health endpoint. If the service does not become healthy, the pipeline prints the last 100 container log lines before failing. The node must have Docker, the Compose plugin, and permission to run Docker Compose. It does not submit Perforce changes, manage Windows helpers, or expose the service through a proxy.
 
 ## Current limitation: in-memory state
 
