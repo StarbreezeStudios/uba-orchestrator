@@ -82,7 +82,8 @@ $principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interact
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
 
-$deadline = (Get-Date).AddSeconds(30)
+$registrationTimeoutSeconds = 90
+$deadline = (Get-Date).AddSeconds($registrationTimeoutSeconds)
 $registeredHelper = $null
 do {
     Start-Sleep -Seconds 2
@@ -97,7 +98,7 @@ do {
 } while (-not $registeredHelper -and (Get-Date) -lt $deadline)
 
 if (-not $registeredHelper) {
-    throw "Helper did not register with $orchestratorUrl within 30 seconds"
+    throw "Helper did not register with $orchestratorUrl within $registrationTimeoutSeconds seconds"
 }
 
 $registeredHelper | ConvertTo-Json -Depth 5 | Write-Host

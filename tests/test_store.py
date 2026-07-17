@@ -50,3 +50,17 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(len(initiators), 1)
         self.assertEqual(initiators[0]["lease_id"], lease.lease_id)
         self.assertEqual(initiators[0]["helpers"][0]["hostname"], "helper-1")
+
+    def test_helper_registration_is_idempotent_and_removes_inactive_duplicates(self):
+        store = Store()
+        first = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8,
+                                       "listen_port": 1346})
+        first.state = "offline"
+        store.register_helper({"helper_id": "legacy-helper", "hostname": "helper-1", "address": "10.0.0.2",
+                               "cores": 16, "listen_port": 1346})
+        current = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 32,
+                                         "listen_port": 1346})
+
+        self.assertEqual(current.helper_id, "legacy-helper")
+        self.assertEqual(len(store.helpers), 1)
+        self.assertEqual(store.helpers[current.helper_id].cores, 32)

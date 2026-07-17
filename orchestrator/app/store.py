@@ -63,7 +63,23 @@ class Store:
 
     def register_helper(self, data: dict) -> Helper:
         with self.lock:
-            helper_id = data.get("helper_id") or str(uuid4())
+            helper_id = data.get("helper_id")
+            if not helper_id:
+                matching_helpers = [
+                    helper for helper in self.helpers.values()
+                    if helper.hostname == data["hostname"]
+                    and helper.address == data["address"]
+                    and helper.listen_port == data.get("listen_port", 1345)
+                ]
+                if matching_helpers:
+                    # Reuse the newest record so restarting a helper does not
+                    # create a second row in the diagnostics view.
+                    matching_helpers.sort(key=lambda helper: helper.last_seen, reverse=True)
+                    helper_id = matching_helpers[0].helper_id
+                    for duplicate in matching_helpers[1:]:
+                        if duplicate.lease_id is None:
+                            del self.helpers[duplicate.helper_id]
+            helper_id = helper_id or str(uuid4())
             helper = self.helpers.get(helper_id)
             if helper is None:
                 helper = Helper(helper_id=helper_id, hostname=data["hostname"], address=data["address"],
