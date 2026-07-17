@@ -54,6 +54,12 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 * A lease expires 30 seconds after creation or its last heartbeat.
 * Native HTTP requests have a finite WinHTTP operation timeout inherited from the process configuration and always fail closed; no bridge call waits indefinitely.
 * A failed reservation leaves UBA without a client and logs through the normal UBA coordinator path. It does not claim capacity.
+
+## State persistence requirement
+
+The MVP store is in-memory. Restarting the orchestrator loses helper registrations, lease state, and the relationship between helpers and active leases. Helpers can re-register, but active initiators do not have durable coordination state to recover from a service restart.
+
+Before production use, replace the in-memory store with a persistent transactional store, preferably SQLite for a single-host deployment or PostgreSQL for high availability. The implementation must persist helpers, leases, heartbeats, and state transitions; expire stale leases atomically; support restart reconciliation; and make helper registration idempotent. Docker deployment does not solve this limitation by itself.
 * Authentication, multiple pools, priorities, durable state, dashboard, and multi-initiator fairness are intentionally out of scope for this MVP.
 
 ## Open questions

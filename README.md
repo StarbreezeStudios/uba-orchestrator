@@ -29,3 +29,5 @@ PYTHONPATH=orchestrator python -m unittest discover -s tests -v
 The native bridge is compiled later from the UE 5.6/UBA Perforce integration workspace and packaged beside the UBA binaries.
 
 See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup sequence.
+
+The MVP store is intentionally in-memory. A service restart clears helper registrations and leases, so persistence and restart reconciliation are required before this becomes shared production infrastructure. See [docs/deployment-helsinki.md](docs/deployment-helsinki.md) for the current Docker deployment and its limitations.
