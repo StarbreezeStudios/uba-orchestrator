@@ -70,6 +70,25 @@ function Get-UbaHelperProcesses {
     })
 }
 
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask -and $existingTask.State -eq 'Running') {
+    Write-Host "Stopping existing scheduled task $taskName"
+    $schtasks = Join-Path $env:SystemRoot 'System32\schtasks.exe'
+    $endTaskProcess = Start-Process `
+        -FilePath $schtasks `
+        -ArgumentList @('/End', '/TN', $taskName) `
+        -NoNewWindow `
+        -PassThru
+
+    if (-not $endTaskProcess.WaitForExit(10000)) {
+        Stop-Process -Id $endTaskProcess.Id -Force -ErrorAction SilentlyContinue
+        Write-Warning "Timed out while asking Task Scheduler to stop $taskName"
+    }
+    elseif ($endTaskProcess.ExitCode -ne 0) {
+        Write-Warning "Task Scheduler returned exit code $($endTaskProcess.ExitCode) while stopping $taskName"
+    }
+}
+
 Get-UbaHelperProcesses |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 
@@ -82,6 +101,19 @@ do {
 if ($remainingHelperProcesses.Count -gt 0) {
     $processIds = $remainingHelperProcesses.ProcessId -join ', '
     throw "Could not stop existing UBA helper processes: $processIds"
+}
+
+$taskStopDeadline = (Get-Date).AddSeconds(30)
+do {
+    $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    if (-not $existingTask -or $existingTask.State -ne 'Running') {
+        break
+    }
+    Start-Sleep -Milliseconds 500
+} while ((Get-Date) -lt $taskStopDeadline)
+
+if ($existingTask -and $existingTask.State -eq 'Running') {
+    throw "Scheduled task $taskName is still running after its helper processes were stopped"
 }
 
 New-Item -ItemType Directory -Path (Split-Path $agentScript), $logDir -Force | Out-Null
@@ -100,7 +132,24 @@ $settings = New-ScheduledTaskSettingsSet `
 $principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
+$helperStartRequestedAtUtc = [DateTimeOffset]::UtcNow
 Start-ScheduledTask -TaskName $taskName
+
+$supervisorDeadline = (Get-Date).AddSeconds(15)
+do {
+    Start-Sleep -Milliseconds 500
+    $supervisorProcesses = @(Get-UbaHelperProcesses | Where-Object {
+        $_.CommandLine -match 'helper-agent[\\/]agent.py'
+    })
+} while ($supervisorProcesses.Count -eq 0 -and (Get-Date) -lt $supervisorDeadline)
+
+if ($supervisorProcesses.Count -eq 0) {
+    $taskState = (Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue).State
+    $taskInfo = Get-ScheduledTaskInfo -TaskName $taskName -ErrorAction SilentlyContinue
+    throw "Scheduled task $taskName did not start the helper supervisor (state: $taskState, last result: $($taskInfo.LastTaskResult))"
+}
+
+Write-Host "Helper supervisor started with process ID(s): $($supervisorProcesses.ProcessId -join ', ')"
 
 $registrationTimeoutSeconds = 180
 $deadline = (Get-Date).AddSeconds($registrationTimeoutSeconds)
@@ -109,7 +158,19 @@ do {
     Start-Sleep -Seconds 2
     try {
         $registeredHelper = @(Invoke-RestMethod "$orchestratorUrl/api/v1/helpers") |
-            Where-Object { [string]$_.hostname -ieq [string]$env:COMPUTERNAME } |
+            Where-Object {
+                $hostnameMatches = [string]$_.hostname -ieq [string]$env:COMPUTERNAME
+                $heartbeatIsFresh = $false
+                if ($hostnameMatches) {
+                    try {
+                        $heartbeatIsFresh = [DateTimeOffset]::Parse([string]$_.last_seen) -ge $helperStartRequestedAtUtc
+                    }
+                    catch {
+                        $heartbeatIsFresh = $false
+                    }
+                }
+                $hostnameMatches -and $heartbeatIsFresh
+            } |
             Sort-Object last_seen -Descending |
             Select-Object -First 1
     }
