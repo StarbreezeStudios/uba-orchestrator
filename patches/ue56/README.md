@@ -8,7 +8,7 @@ From PowerShell:
 .\apply-uba-ubt-patch.ps1 -EngineRoot D:\path\to\payday3\trunk
 ```
 
-The script validates and applies `UBAExecutor.diff`, then copies `UBAAgentCoordinatorOrchestrator.cs` into the UBT source tree. It fails if the diff no longer applies cleanly, which protects the build from silently patching a changed Engine revision.
+The script validates and applies `UBAExecutor.diff` and `ActionGraph.diff`, then copies `UBAAgentCoordinatorOrchestrator.cs` into the UBT source tree. The ActionGraph patch forces the UBA executor only when `UBA_COORDINATOR=Orchestrator`.
 
 The Jenkins build must configure the runtime separately:
 
@@ -18,4 +18,4 @@ UBA_ORCHESTRATOR_URL=http://helsinki:8080
 UBA_TARGET_CORES=128
 ```
 
-XGE should be disabled through the build command/configuration used by Jenkins (`-NoXGE`); the site-wide Perforce `BuildConfiguration.xml` change is intentionally not part of this patch.
+No site-wide Perforce `BuildConfiguration.xml` change is required. Other builds retain their normal executor selection.

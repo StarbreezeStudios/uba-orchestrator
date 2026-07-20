@@ -61,10 +61,34 @@ if (-not $address) {
 Write-Host "Installing UBA helper on $env:COMPUTERNAME ($address)"
 Write-Host "Using UBA agent $ubaAgent"
 
-Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction SilentlyContinue
-Get-CimInstance Win32_Process |
-    Where-Object { $_.CommandLine -and $_.CommandLine -match 'helper-agent[\\/]agent.py' } |
+function Get-UbaHelperProcesses {
+    @(Get-CimInstance Win32_Process | Where-Object {
+        $_.CommandLine -and (
+            $_.CommandLine -match 'helper-agent[\\/]agent.py' -or
+            ($_.Name -ieq 'UbaAgent.exe' -and $_.CommandLine -match "-listen=$listenPort")
+        )
+    })
+}
+
+$existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+if ($existingTask) {
+    Stop-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
+    Unregister-ScheduledTask -TaskName $taskName -Confirm:$false -ErrorAction Stop
+}
+
+Get-UbaHelperProcesses |
     ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+
+$stopDeadline = (Get-Date).AddSeconds(15)
+do {
+    Start-Sleep -Milliseconds 250
+    $remainingHelperProcesses = Get-UbaHelperProcesses
+} while ($remainingHelperProcesses.Count -gt 0 -and (Get-Date) -lt $stopDeadline)
+
+if ($remainingHelperProcesses.Count -gt 0) {
+    $processIds = $remainingHelperProcesses.ProcessId -join ', '
+    throw "Could not stop existing UBA helper processes: $processIds"
+}
 
 New-Item -ItemType Directory -Path (Split-Path $agentScript), $logDir -Force | Out-Null
 Copy-Item -LiteralPath $sourceScript -Destination $agentScript -Force
@@ -76,7 +100,9 @@ New-NetFirewallRule -DisplayName 'UBA Orchestrator Helper 1346' `
 $arguments = "-u `"$agentScript`" --orchestrator $orchestratorUrl --uba-agent `"$ubaAgent`" --address $address --listen-port $listenPort --log-dir `"$logDir`""
 $action = New-ScheduledTaskAction -Execute $pythonPath -Argument $arguments -WorkingDirectory $installRoot
 $trigger = New-ScheduledTaskTrigger -AtLogOn -User 'jkoperator'
-$settings = New-ScheduledTaskSettingsSet -ExecutionTimeLimit ([TimeSpan]::Zero)
+$settings = New-ScheduledTaskSettingsSet `
+    -ExecutionTimeLimit ([TimeSpan]::Zero) `
+    -MultipleInstances IgnoreNew
 $principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null

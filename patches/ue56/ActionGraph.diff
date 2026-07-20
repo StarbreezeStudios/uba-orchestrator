@@ -1,0 +1,28 @@
+--- a/Engine/Source/Programs/UnrealBuildTool/System/ActionGraph.cs
++++ b/Engine/Source/Programs/UnrealBuildTool/System/ActionGraph.cs
+@@ -425,6 +425,23 @@ namespace UnrealBuildTool
+		private static ActionExecutor SelectExecutor(BuildConfiguration BuildConfiguration, int ActionCount, List<TargetDescriptor> TargetDescriptors, ILogger Logger)
+		{
+			int MinActionsForRemote = ParallelExecutor.GetDefaultNumParallelProcesses(BuildConfiguration.MaxParallelActions, BuildConfiguration.bAllCores, Logger);
++			bool useOrchestrator = String.Equals(
++				Environment.GetEnvironmentVariable("UBA_COORDINATOR"),
++				"Orchestrator",
++				StringComparison.OrdinalIgnoreCase);
++			if (useOrchestrator)
++			{
++				ActionExecutor? ubaExecutor = GetRemoteExecutorByName(
++					"UBA",
++					BuildConfiguration,
++					ActionCount,
++					MinActionsForRemote,
++					TargetDescriptors,
++					Logger);
++				if (ubaExecutor != null)
++				{
++					Logger.LogInformation("Forcing UBA executor for orchestrator build");
++					return ubaExecutor;
++				}
++			}
+			foreach (string Name in BuildConfiguration.RemoteExecutorPriority)
+			{
+				ActionExecutor? Executor = GetRemoteExecutorByName(Name, BuildConfiguration, ActionCount, MinActionsForRemote, TargetDescriptors, Logger);
