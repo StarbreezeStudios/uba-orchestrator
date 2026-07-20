@@ -64,7 +64,7 @@ Write-Host "Using UBA agent $ubaAgent"
 function Get-UbaHelperProcesses {
     @(Get-CimInstance Win32_Process | Where-Object {
         $_.CommandLine -and (
-            $_.CommandLine -match 'helper-agent[\\/]agent.py' -or
+            $_.CommandLine -like '*helper-agent*agent.py*' -or
             ($_.Name -ieq 'UbaAgent.exe' -and $_.CommandLine -match "-listen=$listenPort")
         )
     })
@@ -73,7 +73,7 @@ function Get-UbaHelperProcesses {
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existingTask -and $existingTask.State -eq 'Running') {
     Write-Host "Stopping existing scheduled task $taskName"
-    $schtasks = Join-Path $env:SystemRoot 'System32\\schtasks.exe'
+    $schtasks = Join-Path (Join-Path $env:SystemRoot 'System32') 'schtasks.exe'
     $endTaskProcess = Start-Process `
         -FilePath $schtasks `
         -ArgumentList @('/End', '/TN', $taskName) `
@@ -84,8 +84,12 @@ if ($existingTask -and $existingTask.State -eq 'Running') {
         Stop-Process -Id $endTaskProcess.Id -Force -ErrorAction SilentlyContinue
         Write-Warning "Timed out while asking Task Scheduler to stop $taskName"
     }
-    elseif ($endTaskProcess.ExitCode -ne 0) {
-        Write-Warning "Task Scheduler returned exit code $($endTaskProcess.ExitCode) while stopping $taskName"
+    else {
+        $endTaskProcess.WaitForExit()
+        $endTaskProcess.Refresh()
+        if ($endTaskProcess.ExitCode -ne 0) {
+            Write-Warning "Task Scheduler returned exit code $($endTaskProcess.ExitCode) while stopping $taskName"
+        }
     }
 }
 
@@ -139,7 +143,7 @@ $supervisorDeadline = (Get-Date).AddSeconds(15)
 do {
     Start-Sleep -Milliseconds 500
     $supervisorProcesses = @(Get-UbaHelperProcesses | Where-Object {
-        $_.CommandLine -match 'helper-agent[\\/]agent.py'
+        $_.CommandLine -like '*helper-agent*agent.py*'
     })
 } while ($supervisorProcesses.Count -eq 0 -and (Get-Date) -lt $supervisorDeadline)
 
