@@ -87,8 +87,9 @@ if ($existingTask -and $existingTask.State -eq 'Running') {
     else {
         $endTaskProcess.WaitForExit()
         $endTaskProcess.Refresh()
-        if ($endTaskProcess.ExitCode -ne 0) {
-            Write-Warning "Task Scheduler returned exit code $($endTaskProcess.ExitCode) while stopping $taskName"
+        $endTaskExitCode = $endTaskProcess.ExitCode
+        if ($null -ne $endTaskExitCode -and $endTaskExitCode -ne 0) {
+            Write-Warning "Task Scheduler returned exit code $endTaskExitCode while stopping $taskName"
         }
     }
 }
@@ -136,7 +137,6 @@ $settings = New-ScheduledTaskSettingsSet `
 $principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interactive -RunLevel Highest
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
-$helperStartRequestedAtUtc = [DateTimeOffset]::UtcNow
 Start-ScheduledTask -TaskName $taskName
 
 $supervisorDeadline = (Get-Date).AddSeconds(15)
@@ -155,36 +155,58 @@ if ($supervisorProcesses.Count -eq 0) {
 
 Write-Host "Helper supervisor started with process ID(s): $($supervisorProcesses.ProcessId -join ', ')"
 
+function Get-RegisteredHelper {
+    $helpers = Invoke-RestMethod "$orchestratorUrl/api/v1/helpers"
+    $matchingHelpers = @()
+    foreach ($helper in @($helpers)) {
+        if ([string]$helper.hostname -ieq [string]$env:COMPUTERNAME) {
+            $matchingHelpers += $helper
+        }
+    }
+
+    $matchingHelpers |
+        Sort-Object last_seen -Descending |
+        Select-Object -First 1
+}
+
 $registrationTimeoutSeconds = 180
 $deadline = (Get-Date).AddSeconds($registrationTimeoutSeconds)
 $registeredHelper = $null
+$initialHeartbeat = $null
+$latestHeartbeat = $null
+$lastRegistrationError = $null
 do {
     Start-Sleep -Seconds 2
     try {
-        $registeredHelper = @(Invoke-RestMethod "$orchestratorUrl/api/v1/helpers") |
-            Where-Object {
-                $hostnameMatches = [string]$_.hostname -ieq [string]$env:COMPUTERNAME
-                $heartbeatIsFresh = $false
-                if ($hostnameMatches) {
-                    try {
-                        $heartbeatIsFresh = [DateTimeOffset]::Parse([string]$_.last_seen) -ge $helperStartRequestedAtUtc
-                    }
-                    catch {
-                        $heartbeatIsFresh = $false
-                    }
-                }
-                $hostnameMatches -and $heartbeatIsFresh
-            } |
-            Sort-Object last_seen -Descending |
-            Select-Object -First 1
+        $candidateHelper = Get-RegisteredHelper
+        $lastRegistrationError = $null
+        if ($candidateHelper) {
+            $latestHeartbeat = [string]$candidateHelper.last_seen
+            if ($null -eq $initialHeartbeat) {
+                $initialHeartbeat = $latestHeartbeat
+                Write-Host "Observed helper heartbeat at $initialHeartbeat; waiting for the next heartbeat"
+            }
+            elseif ($latestHeartbeat -ne $initialHeartbeat) {
+                $registeredHelper = $candidateHelper
+            }
+        }
     }
     catch {
-        $registeredHelper = $null
+        $lastRegistrationError = $_.Exception.Message
     }
 } while (-not $registeredHelper -and (Get-Date) -lt $deadline)
 
 if (-not $registeredHelper) {
-    throw "Helper did not register with $orchestratorUrl within $registrationTimeoutSeconds seconds"
+    $details = if ($lastRegistrationError) {
+        "Last API error: $lastRegistrationError"
+    }
+    elseif ($latestHeartbeat) {
+        "Last observed heartbeat remained at $latestHeartbeat"
+    }
+    else {
+        "No helper record was returned by the API"
+    }
+    throw "Helper did not produce a new heartbeat at $orchestratorUrl within $registrationTimeoutSeconds seconds. $details"
 }
 
 Write-Host "Registered helper address: $($registeredHelper.address):$($registeredHelper.listen_port)"
