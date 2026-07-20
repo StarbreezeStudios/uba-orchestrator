@@ -73,7 +73,7 @@ function Get-UbaHelperProcesses {
 $existingTask = Get-ScheduledTask -TaskName $taskName -ErrorAction SilentlyContinue
 if ($existingTask -and $existingTask.State -eq 'Running') {
     Write-Host "Stopping existing scheduled task $taskName"
-    $schtasks = Join-Path $env:SystemRoot 'System32\schtasks.exe'
+    $schtasks = Join-Path $env:SystemRoot 'System32\\schtasks.exe'
     $endTaskProcess = Start-Process `
         -FilePath $schtasks `
         -ArgumentList @('/End', '/TN', $taskName) `
