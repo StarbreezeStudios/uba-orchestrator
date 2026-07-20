@@ -41,7 +41,7 @@ The MVP endpoints are:
 * `POST /api/v1/helpers/register`: helper metadata; returns `helper_id`.
 * `POST /api/v1/helpers/{helper_id}/heartbeat`: readiness, PID, and port.
 * `POST /api/v1/leases`: initiator identity, port, and requested cores; returns a lease and selected helpers.
-* `POST /api/v1/leases/{lease_id}/heartbeat`: extends the lease expiry.
+* `POST /api/v1/leases/{lease_id}/heartbeat`: initiator heartbeat that extends the lease expiry.
 * `GET /api/v1/leases/{lease_id}`: state and selected helper endpoints.
 * `DELETE /api/v1/leases/{lease_id}`: release reservation.
 * `GET /api/v1/health`: liveness.
@@ -52,6 +52,7 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 
 * Helper liveness expires after 15 seconds without a heartbeat.
 * A lease expires 30 seconds after creation or its last heartbeat.
+* Helper heartbeats report readiness but do not renew leases. Only the initiator can renew its lease, so an aborted build releases its helpers automatically.
 * Native HTTP requests have a finite WinHTTP operation timeout inherited from the process configuration and always fail closed; no bridge call waits indefinitely.
 * A failed reservation leaves UBA without a client and logs through the normal UBA coordinator path. It does not claim capacity.
 

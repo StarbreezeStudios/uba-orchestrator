@@ -132,6 +132,11 @@ namespace UnrealBuildTool
                         _leaseId);
                 }
 
+                if (!await HeartbeatLeaseAsync(cancellationToken))
+                {
+                    return;
+                }
+
                 string response = await GetAsync(
                     $"/api/v1/leases/{_leaseId}",
                     cancellationToken);
@@ -204,10 +209,6 @@ namespace UnrealBuildTool
                             $"Connected to {address}:{port}",
                             LogEntryType.Info,
                             null);
-
-                        _timer?.Change(
-                            Timeout.Infinite,
-                            Timeout.Infinite);
                     }
                 }
             }
@@ -276,6 +277,31 @@ namespace UnrealBuildTool
             return document.RootElement
                 .GetProperty("lease_id")
                 .GetString();
+        }
+
+        async Task<bool> HeartbeatLeaseAsync(
+            CancellationToken cancellationToken)
+        {
+            using HttpResponseMessage response =
+                await _httpClient.PostAsync(
+                    BuildUri($"/api/v1/leases/{_leaseId}/heartbeat"),
+                    null,
+                    cancellationToken);
+
+            if (response.StatusCode == HttpStatusCode.NotFound ||
+                response.StatusCode == HttpStatusCode.Conflict ||
+                response.StatusCode == HttpStatusCode.Gone)
+            {
+                _logger.LogWarning(
+                    "Orchestrator lease {LeaseId} is no longer available",
+                    _leaseId);
+                _leaseId = null;
+                _addedHelpers.Clear();
+                return false;
+            }
+
+            response.EnsureSuccessStatusCode();
+            return true;
         }
 
         async Task<string> GetAsync(

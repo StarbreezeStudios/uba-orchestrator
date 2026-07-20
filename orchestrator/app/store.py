@@ -108,9 +108,16 @@ class Store:
                 helper.state = "active"
                 lease = self.leases[helper.lease_id]
                 lease.state = "active"
+            return helper
+
+    def heartbeat_lease(self, lease_id: str) -> Lease:
+        with self.lock:
+            self.reap()
+            lease = self.leases[lease_id]
+            if lease.state not in ("released", "expired"):
                 lease.last_seen = now()
                 lease.expires_at = lease.last_seen + timedelta(seconds=30)
-            return helper
+            return lease
 
     def create_lease(self, data: dict) -> Lease | None:
         with self.lock:

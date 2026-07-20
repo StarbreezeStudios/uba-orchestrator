@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
-
-from .store import Store, now
+from .store import Store
 
 try:
     from fastapi import FastAPI, HTTPException
@@ -127,9 +125,10 @@ if FastAPI is not None:
     @app.post("/api/v1/leases/{lease_id}/heartbeat")
     def lease_heartbeat(lease_id: str) -> dict:
         try:
-            store.leases[lease_id].last_seen = now()
-            store.leases[lease_id].expires_at = store.leases[lease_id].last_seen + timedelta(seconds=30)
-            return store.lease_view(lease_id)
+            lease = store.heartbeat_lease(lease_id)
+            if lease.state in ("released", "expired"):
+                raise HTTPException(409, "Lease is no longer active")
+            return store.lease_view(lease.lease_id)
         except KeyError as error:
             raise HTTPException(404, "Unknown lease") from error
 
