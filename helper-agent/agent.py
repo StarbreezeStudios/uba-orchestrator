@@ -9,6 +9,7 @@ import platform
 import socket
 import subprocess
 import time
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -50,18 +51,46 @@ def main() -> int:
     identity = {"hostname": socket.gethostname(), "address": args.address, "cores": os.cpu_count() or 1,
                 "memory_bytes": 0, "platform": platform.system().lower(), "uba_version": "unknown",
                 "listen_port": args.listen_port}
-    helper = request(base + "/api/v1/helpers/register", "POST", identity)
-    helper_id = helper["helper_id"]
+    helper_id: str | None = None
     process: subprocess.Popen | None = None
     log_handles = None
     lease_id: str | None = None
     try:
         while True:
+            if helper_id is None:
+                try:
+                    helper = request(base + "/api/v1/helpers/register", "POST", identity)
+                    helper_id = helper["helper_id"]
+                    print(f"Registered helper {identity['hostname']} as {helper_id}", flush=True)
+                except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as error:
+                    print(f"Unable to register with orchestrator: {error}; retrying", flush=True)
+                    time.sleep(args.interval)
+                    continue
+
             payload = {"agent_ready": bool(process and process.poll() is None),
                        "agent_port": args.listen_port, "pid": process.pid if process else None}
-            current = request(f"{base}/api/v1/helpers/{helper_id}/heartbeat", "POST", payload)
+            try:
+                current = request(f"{base}/api/v1/helpers/{helper_id}/heartbeat", "POST", payload)
+            except urllib.error.HTTPError as error:
+                if error.code == 404:
+                    print("Orchestrator lost helper registration; registering again", flush=True)
+                    stop_agent_process(process, log_handles)
+                    process = None
+                    log_handles = None
+                    lease_id = None
+                    helper_id = None
+                else:
+                    print(f"Helper heartbeat failed: {error}; retrying", flush=True)
+                time.sleep(args.interval)
+                continue
+            except (urllib.error.URLError, TimeoutError) as error:
+                print(f"Orchestrator is unavailable: {error}; retrying", flush=True)
+                time.sleep(args.interval)
+                continue
+
             assigned_lease_id = current.get("lease_id")
             if process and lease_id and assigned_lease_id != lease_id:
+                print(f"Lease {lease_id} was released or replaced; stopping UbaAgent", flush=True)
                 stop_agent_process(process, log_handles)
                 process = None
                 log_handles = None
@@ -74,6 +103,7 @@ def main() -> int:
                 log_handles = (stdout, stderr)
                 process = subprocess.Popen([args.uba_agent, f"-listen={args.listen_port}"],
                                             stdout=stdout, stderr=stderr, text=True)
+                print(f"Started UbaAgent for lease {lease_id}", flush=True)
             if process and process.poll() is not None:
                 close_logs(log_handles)
                 log_handles = None
