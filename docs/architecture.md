@@ -5,7 +5,7 @@ This document describes the first two-machine implementation for this checkout o
 ## Components
 
 * `coordinator-bridge/` is a small native coordinator DLL. It implements the exact `uba::Coordinator` interface and uses WinHTTP to call the Python service. The service URL is supplied through `UBA_ORCHESTRATOR_URL`; the existing host configuration maps its `Coordinator.Uri` value to `UE_HORDE_URL`, which the bridge also accepts for compatibility. `src/UbaCoordinatorOrchestrator/` is the UBT-discoverable module wrapper for this source.
-* `orchestrator/` is a FastAPI service. The MVP keeps helpers and leases in memory; SQLite is intentionally deferred until the HTTP contract is exercised.
+* `orchestrator/` is a FastAPI service. It uses SQLite by default and keeps the in-memory dictionaries as a loaded working set. Mutations are committed transactionally to the SQLite database.
 * `helper-agent/` registers a Windows helper, polls its heartbeat, starts `UbaAgent.exe -listen=<port>`, and reports readiness.
 
 The native source is intentionally separate from Epic source. The UBT target file is `src/UbaCoordinatorOrchestrator.Target.cs`; the bridge module should be placed in the UBA program source tree when this checkout is integrated into the full Engine tree.
@@ -58,9 +58,9 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 
 ## State persistence requirement
 
-The MVP store is in-memory. Restarting the orchestrator loses helper registrations, lease state, and the relationship between helpers and active leases. Helpers can re-register, but active initiators do not have durable coordination state to recover from a service restart.
+The orchestrator stores helpers, leases, lease-helper relationships, heartbeats, and expiry timestamps in SQLite. The database path is configured with `UBA_ORCHESTRATOR_DB`; Docker uses `/var/lib/uba-orchestrator/orchestrator.db` on the `orchestrator-data` volume.
 
-Before production use, replace the in-memory store with a persistent transactional store, preferably SQLite for a single-host deployment or PostgreSQL for high availability. The implementation must persist helpers, leases, heartbeats, and state transitions; expire stale leases atomically; support restart reconciliation; and make helper registration idempotent. Docker deployment does not solve this limitation by itself.
+On startup, stale helpers are marked `offline` and expired leases are marked `expired`; assigned helpers are released when a lease expires. Helper registration remains idempotent. Lease allocation uses an SQLite write transaction so concurrent allocators cannot reserve the same helper. This implementation is intended for one orchestrator instance; PostgreSQL and an explicit multi-instance locking strategy are still required for high availability.
 * Authentication, multiple pools, priorities, durable state, dashboard, and multi-initiator fairness are intentionally out of scope for this MVP.
 
 ## Open questions

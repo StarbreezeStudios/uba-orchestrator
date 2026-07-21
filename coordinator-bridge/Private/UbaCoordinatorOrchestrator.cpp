@@ -108,15 +108,18 @@ namespace
         void SetTargetCoreCount(uba::u32 count) override
         {
             if (!m_callback || count == 0) return;
+            std::string response;
             if (m_lease.empty())
             {
-                std::string response;
                 std::string body = "{\"initiator_id\":\"uba-initiator\",\"initiator_address\":\"" + GetInitiatorAddress() + "\",\"initiator_port\":" + std::to_string(GetInitiatorPort()) + ",\"target_core_count\":" + std::to_string(count) + "}";
                 if (!Request(L"POST", L"/api/v1/leases", body, response)) return;
                 m_lease = JsonString(response, "lease_id");
                 if (m_lease.empty()) return;
             }
-            std::string response;
+            // Keep the durable lease alive while UBA is still using it.
+            if (!Request(L"POST", std::wstring(L"/api/v1/leases/") + std::wstring(m_lease.begin(), m_lease.end()) + L"/heartbeat", {}, response))
+                return;
+            response.clear();
             if (!Request(L"GET", std::wstring(L"/api/v1/leases/") + std::wstring(m_lease.begin(), m_lease.end()), {}, response)) return;
             if (JsonString(response, "state") != "active") return;
             std::string address = JsonString(response, "address");

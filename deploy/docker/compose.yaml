@@ -7,6 +7,10 @@ services:
     restart: unless-stopped
     ports:
       - "8080:8080"
+    environment:
+      UBA_ORCHESTRATOR_DB: /var/lib/uba-orchestrator/orchestrator.db
+    volumes:
+      - orchestrator-data:/var/lib/uba-orchestrator
     init: true
     stop_grace_period: 10s
     healthcheck:
@@ -21,3 +25,6 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
+
+volumes:
+  orchestrator-data:

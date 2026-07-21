@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from .store import Store
 
 try:
@@ -9,7 +11,7 @@ except ImportError:  # The pure store remains testable without optional server d
     FastAPI = None
 
 
-store = Store()
+store = Store(os.environ.get("UBA_ORCHESTRATOR_DB", "orchestrator.db"))
 
 if FastAPI is not None:
     app = FastAPI(title="UBA Orchestrator", version="0.1.0")

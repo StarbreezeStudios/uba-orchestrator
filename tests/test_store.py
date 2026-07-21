@@ -1,4 +1,6 @@
 import sys
+import tempfile
+import threading
 import unittest
 from pathlib import Path
 
@@ -8,6 +10,67 @@ from app.store import Store
 
 
 class StoreTests(unittest.TestCase):
+    def test_state_survives_store_recreation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8,
+                                            "listen_port": 1346})
+            lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                        "initiator_port": 1345, "target_core_count": 4})
+            store.close()
+
+            restarted = Store(database)
+            self.assertIn(helper.helper_id, restarted.helpers)
+            self.assertIn(lease.lease_id, restarted.leases)
+            self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "pending")
+            restarted.close()
+
+    def test_stale_state_is_reconciled_when_store_restarts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+            lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                        "initiator_port": 1345, "target_core_count": 4})
+            store.leases[lease.lease_id].expires_at = store.leases[lease.lease_id].expires_at.replace(year=2020)
+            store.helpers[helper.helper_id].last_seen = store.helpers[helper.helper_id].last_seen.replace(year=2020)
+            store._connection.execute("UPDATE leases SET expires_at = ? WHERE lease_id = ?",
+                                      (store.leases[lease.lease_id].expires_at.isoformat(), lease.lease_id))
+            store._connection.execute("UPDATE helpers SET last_seen = ? WHERE helper_id = ?",
+                                      (store.helpers[helper.helper_id].last_seen.isoformat(), helper.helper_id))
+            store._connection.commit()
+            store.close()
+
+            restarted = Store(database)
+            self.assertEqual(restarted.leases[lease.lease_id].state, "expired")
+            self.assertEqual(restarted.helpers[helper.helper_id].state, "offline")
+            self.assertIsNone(restarted.helpers[helper.helper_id].lease_id)
+            restarted.close()
+
+    def test_sqlite_allocation_is_transactionally_exclusive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            first = Store(database)
+            first.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+            second = Store(database)
+            leases = []
+
+            def allocate(store, initiator):
+                leases.append(store.create_lease({"initiator_id": initiator, "initiator_address": "10.0.0.1",
+                                                  "initiator_port": 1345, "target_core_count": 8}))
+
+            threads = [threading.Thread(target=allocate, args=(first, "one")),
+                       threading.Thread(target=allocate, args=(second, "two"))]
+            for thread in threads:
+                thread.start()
+            for thread in threads:
+                thread.join()
+
+            self.assertEqual(sum(lease is not None for lease in leases), 1)
+            first.close()
+            second.close()
+
     def test_lease_selects_idle_capacity_and_release_returns_helper_to_idle(self):
         store = Store()
         helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8, "listen_port": 1346})

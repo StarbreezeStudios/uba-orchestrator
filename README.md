@@ -20,6 +20,8 @@ python -m pip install -r orchestrator/requirements.txt
 PYTHONPATH=orchestrator python -m uvicorn app.main:app --host 127.0.0.1 --port 8080
 ```
 
+The service stores state in `orchestrator.db` by default. Set `UBA_ORCHESTRATOR_DB` to choose another path. The Docker Compose deployment sets this to `/var/lib/uba-orchestrator/orchestrator.db` and persists that directory in the `orchestrator-data` volume.
+
 Run the standard-library test suite with:
 
 ```bash
@@ -32,4 +34,4 @@ See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup seque
 
 When the service is running, open `/ui` for the local operations dashboard. It shows registered helpers and active initiator leases; the tables refresh every three seconds.
 
-The MVP store is intentionally in-memory. A service restart clears helper registrations and leases, so persistence and restart reconciliation are required before this becomes shared production infrastructure. See [docs/deployment-helsinki.md](docs/deployment-helsinki.md) for the current Docker deployment and its limitations.
+SQLite persistence and restart reconciliation are now implemented. A service restart retains helper and lease records; stale helpers and expired leases are reconciled on startup. The service still assumes a single orchestrator instance.
