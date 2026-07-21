@@ -60,7 +60,7 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 
 The orchestrator stores helpers, leases, lease-helper relationships, heartbeats, and expiry timestamps in SQLite. The database path is configured with `UBA_ORCHESTRATOR_DB`; Docker uses `/var/lib/uba-orchestrator/orchestrator.db` on the `orchestrator-data` volume.
 
-On startup, stale helpers are marked `offline` and expired leases are marked `expired`; assigned helpers are released when a lease expires. Helper registration remains idempotent. Lease allocation uses an SQLite write transaction so concurrent allocators cannot reserve the same helper. This implementation is intended for one orchestrator instance; PostgreSQL and an explicit multi-instance locking strategy are still required for high availability.
+On startup, all non-terminal leases are marked `expired` because their runtime connections cannot be restored safely, and their helpers are released. Stale helpers are marked `offline`; a heartbeat from a still-running helper revives it to `idle`, allowing the helper supervisor to receive a fresh lease. Initiators detect the expired lease and create a new one. Helper registration remains idempotent. Lease allocation uses an SQLite write transaction so concurrent allocators cannot reserve the same helper. This implementation is intended for one orchestrator instance; PostgreSQL and an explicit multi-instance locking strategy are still required for high availability.
 * Authentication, multiple pools, priorities, durable state, dashboard, and multi-initiator fairness are intentionally out of scope for this MVP.
 
 ## Open questions

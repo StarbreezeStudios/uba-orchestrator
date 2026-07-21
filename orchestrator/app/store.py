@@ -66,6 +66,7 @@ class Store:
             self._connection.row_factory = sqlite3.Row
             self._create_schema()
             self._load()
+            self._reconcile_restart_locked()
             self._reap_locked()
             self._save()
             self._connection.commit()
@@ -198,6 +199,18 @@ class Store:
                         helper.agent_ready = False
         return changed
 
+    def _reconcile_restart_locked(self) -> None:
+        """Invalidate runtime assignments that cannot survive a service restart."""
+        for lease in self.leases.values():
+            if lease.state in TERMINAL_LEASE_STATES:
+                continue
+            lease.state = "expired"
+            for helper in self.helpers.values():
+                if helper.lease_id == lease.lease_id:
+                    helper.lease_id = None
+                    helper.state = "idle"
+                    helper.agent_ready = False
+
     def reap(self) -> None:
         with self.lock:
             self._begin()
@@ -250,6 +263,8 @@ class Store:
             try:
                 helper = self.helpers[helper_id]
                 helper.last_seen = now()
+                if helper.state == "offline":
+                    helper.state = "idle"
                 if data.get("agent_ready") is not None:
                     helper.agent_ready = bool(data["agent_ready"])
                 if data.get("agent_port"):

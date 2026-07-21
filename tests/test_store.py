@@ -23,7 +23,7 @@ class StoreTests(unittest.TestCase):
             restarted = Store(database)
             self.assertIn(helper.helper_id, restarted.helpers)
             self.assertIn(lease.lease_id, restarted.leases)
-            self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "pending")
+            self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "expired")
             restarted.close()
 
     def test_stale_state_is_reconciled_when_store_restarts(self):
@@ -46,6 +46,22 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(restarted.leases[lease.lease_id].state, "expired")
             self.assertEqual(restarted.helpers[helper.helper_id].state, "offline")
             self.assertIsNone(restarted.helpers[helper.helper_id].lease_id)
+            restarted.close()
+
+    def test_helper_heartbeat_revives_helper_after_orchestrator_restart(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+            store.helpers[helper.helper_id].state = "offline"
+            store._connection.execute("UPDATE helpers SET state = 'offline' WHERE helper_id = ?", (helper.helper_id,))
+            store._connection.commit()
+            store.close()
+
+            restarted = Store(database)
+            revived = restarted.heartbeat_helper(helper.helper_id, {"agent_ready": False})
+            self.assertEqual(revived.state, "idle")
+            self.assertEqual(restarted.helpers[helper.helper_id].state, "idle")
             restarted.close()
 
     def test_sqlite_allocation_is_transactionally_exclusive(self):

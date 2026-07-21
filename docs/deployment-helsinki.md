@@ -43,7 +43,7 @@ The pipeline runs `docker compose up -d --build --force-recreate` from the Jenki
 
 ## Current limitation: in-memory state
 
-The container persists orchestrator state in the `orchestrator-data` Docker volume. A restart retains helper registrations and leases, then reconciles stale helpers and expired leases. The deployment is still single-instance; do not run multiple orchestrator containers against the same SQLite file.
+The container persists orchestrator state in the `orchestrator-data` Docker volume. On restart, active runtime leases are expired deliberately so initiators can request fresh assignments; helpers that continue heartbeating are revived and can be assigned again. The deployment is still single-instance; do not run multiple orchestrator containers against the same SQLite file.
 
 ## Network and security
 
