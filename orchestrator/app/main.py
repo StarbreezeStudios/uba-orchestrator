@@ -80,6 +80,7 @@ if FastAPI is not None:
         ]);
         const helpers = await helpersResponse.json();
         const initiators = await initiatorsResponse.json();
+        helpers.sort((left, right) => String(left.hostname ?? '').localeCompare(String(right.hostname ?? ''), undefined, { sensitivity: 'base' }));
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
           <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${h.agent_ready ? 'ready' : 'not ready'}</td>
