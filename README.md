@@ -35,3 +35,5 @@ See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup seque
 When the service is running, open `/ui` for the local operations dashboard. It shows registered helpers and active initiator leases; the tables refresh every three seconds.
 
 SQLite persistence and restart reconciliation are now implemented. A service restart retains helper and lease records; stale helpers and expired leases are reconciled on startup. The service still assumes a single orchestrator instance.
+
+The Jenkins helper deployment installs `UbaOrchestratorHelper` as a machine-level Scheduled Task that starts at Windows boot and restarts the helper supervisor after failures.

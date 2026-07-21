@@ -17,7 +17,9 @@ For a local non-Docker run, set `UBA_ORCHESTRATOR_DB` to an explicit writable pa
 
 ## Start one helper
 
-On the Windows helper:
+On the Windows helper, run the Jenkins helper deployment. It installs `UbaOrchestratorHelper` as a machine-level Scheduled Task configured with an `AtStartup` trigger and automatic restart. It therefore does not depend on `jkoperator` logging in.
+
+For a manual foreground test on the Windows helper:
 
 ```text
 python helper-agent\\agent.py --orchestrator http://<ORCHESTRATOR>:8080 --uba-agent C:\\Path\\To\\UbaAgent.exe --address <HELPER_IP> --listen-port 1346

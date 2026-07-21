@@ -130,11 +130,16 @@ New-NetFirewallRule -DisplayName 'UBA Orchestrator Helper 1346' `
 
 $arguments = "-u `"$agentScript`" --orchestrator $orchestratorUrl --uba-agent `"$ubaAgent`" --address $address --listen-port $listenPort --log-dir `"$logDir`""
 $action = New-ScheduledTaskAction -Execute $pythonPath -Argument $arguments -WorkingDirectory $installRoot
-$trigger = New-ScheduledTaskTrigger -AtLogOn -User 'jkoperator'
+$trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
-    -MultipleInstances IgnoreNew
-$principal = New-ScheduledTaskPrincipal -UserId 'jkoperator' -LogonType Interactive -RunLevel Highest
+    -MultipleInstances IgnoreNew `
+    -RestartCount 999 `
+    -RestartInterval (New-TimeSpan -Minutes 1) `
+    -StartWhenAvailable `
+    -AllowStartIfOnBatteries `
+    -DontStopIfGoingOnBatteries
+$principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 
 Register-ScheduledTask -TaskName $taskName -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Force | Out-Null
 Start-ScheduledTask -TaskName $taskName
