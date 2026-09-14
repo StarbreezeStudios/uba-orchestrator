@@ -102,7 +102,10 @@ New-NetFirewallRule -DisplayName 'UBA Orchestrator Helper 1346' `
     -Profile Domain,Private -ErrorAction SilentlyContinue | Out-Null
 
 $arguments = "-u `"$agentScript`" --orchestrator $orchestratorUrl --uba-agent `"$ubaAgent`" --address $address --listen-port $listenPort --log-dir `"$logDir`""
-$action = New-ScheduledTaskAction -Execute $pythonPath -Argument $arguments -WorkingDirectory $installRoot
+$supervisorLog = Join-Path $logDir 'supervisor.log'
+Add-Content -LiteralPath $supervisorLog -Value "[$(Get-Date -Format o)] Starting helper supervisor"
+$cmdArguments = "/d /c `"`"$pythonPath`" $arguments 1>> `"$supervisorLog`" 2>&1`""
+$action = New-ScheduledTaskAction -Execute $env:ComSpec -Argument $cmdArguments -WorkingDirectory $installRoot
 $trigger = New-ScheduledTaskTrigger -AtStartup
 $settings = New-ScheduledTaskSettingsSet `
     -ExecutionTimeLimit ([TimeSpan]::Zero) `
@@ -184,7 +187,13 @@ if (-not $registeredHelper) {
     else {
         "No helper record was returned by the API"
     }
-    throw "Helper did not produce a new heartbeat at $orchestratorUrl within $registrationTimeoutSeconds seconds. $details"
+    $supervisorLogTail = if (Test-Path -LiteralPath $supervisorLog -PathType Leaf) {
+        Get-Content -LiteralPath $supervisorLog -Tail 100 | Out-String
+    }
+    else {
+        'Supervisor log was not created'
+    }
+    throw "Helper did not produce a new heartbeat at $orchestratorUrl within $registrationTimeoutSeconds seconds. $details`nSupervisor log:`n$supervisorLogTail"
 }
 
 Write-Host "Registered helper address: $($registeredHelper.address):$($registeredHelper.listen_port)"
