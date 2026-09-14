@@ -73,6 +73,10 @@ if FastAPI is not None:
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
+    const agentState = helper => helper.state === 'offline' ? 'offline'
+      : helper.agent_ready ? 'ready'
+      : helper.state === 'reserved' ? 'starting'
+      : 'idle';
     const refresh = async () => {
       try {
         const [helpersResponse, initiatorsResponse] = await Promise.all([
@@ -83,7 +87,7 @@ if FastAPI is not None:
         helpers.sort((left, right) => String(left.hostname ?? '').localeCompare(String(right.hostname ?? ''), undefined, { sensitivity: 'base' }));
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
           <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
-          <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${h.agent_ready ? 'ready' : 'not ready'}</td>
+          <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
           <td><code>${esc(h.lease_id || '-')}</code></td><td>${esc(h.last_seen)}</td></tr>`).join('')
           : '<tr><td colspan="7">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
