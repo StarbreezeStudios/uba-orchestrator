@@ -237,6 +237,9 @@ class Store:
                         helper_id = candidates[0].helper_id
                         for duplicate in matching:
                             if duplicate.helper_id != helper_id and duplicate.lease_id is None:
+                                for lease in self.leases.values():
+                                    lease.helper_ids = [existing_id for existing_id in lease.helper_ids
+                                                        if existing_id != duplicate.helper_id]
                                 del self.helpers[duplicate.helper_id]
                 helper_id = helper_id or str(uuid4())
                 helper = self.helpers.get(helper_id)
