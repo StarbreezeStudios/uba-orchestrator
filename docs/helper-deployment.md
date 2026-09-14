@@ -12,7 +12,7 @@ The job runs on the corresponding `${node_name}-service` label. It copies `helpe
 
 The orchestrator URL, helper port, and UBA agent source are deployment constants. The job copies `\\devopsfs.starbreeze.com\DevOps\Software-Installs\UbaAgent\UbaAgent.exe` to `C:\ProgramData\Epic\UbaOrchestrator\bin\UbaAgent.exe`; the helper never executes the binary directly from the share. The helper registers against `http://helsinki:8080` and the pipeline waits up to 180 seconds until a helper with the target hostname appears in `/api/v1/helpers`. The address returned by the orchestrator is logged for diagnostics because Windows can select a different local interface than the deployment script's route discovery.
 
-Helper registration is idempotent for the same hostname, address, and listen port. Restarting or redeploying a helper reuses its existing orchestrator record instead of creating a duplicate row. Inactive duplicate records from earlier deployments are consolidated when the helper registers again.
+Helper registration is idempotent for the same hostname and listen port. Restarting or redeploying a helper reuses an unleased orchestrator record and updates its address, so an IP change does not create a duplicate row. Unleased duplicate records from earlier deployments are consolidated when the helper registers again.
 
 The target machine must already have:
 

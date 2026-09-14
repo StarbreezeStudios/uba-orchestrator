@@ -228,13 +228,15 @@ class Store:
                 helper_id = data.get("helper_id")
                 if not helper_id:
                     matching = [h for h in self.helpers.values() if h.hostname == data["hostname"]
-                                and h.address == data["address"]
                                 and h.listen_port == data.get("listen_port", 1345)]
-                    if matching:
-                        matching.sort(key=lambda helper: helper.last_seen, reverse=True)
-                        helper_id = matching[0].helper_id
-                        for duplicate in matching[1:]:
-                            if duplicate.lease_id is None:
+                    same_address = [h for h in matching if h.address == data["address"]]
+                    reusable = [h for h in matching if h.lease_id is None]
+                    candidates = same_address or reusable
+                    if candidates:
+                        candidates.sort(key=lambda helper: helper.last_seen, reverse=True)
+                        helper_id = candidates[0].helper_id
+                        for duplicate in matching:
+                            if duplicate.helper_id != helper_id and duplicate.lease_id is None:
                                 del self.helpers[duplicate.helper_id]
                 helper_id = helper_id or str(uuid4())
                 helper = self.helpers.get(helper_id)
