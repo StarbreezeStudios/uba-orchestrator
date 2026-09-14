@@ -1,6 +1,10 @@
 pipeline {
     agent { label 'uba-helper' }
 
+    environment {
+        P4CLIENT = p4util.fetchClientName(env.NODE_NAME, jobContext.branchId)
+    }
+
     options {
         timestamps()
         buildDiscarder(logRotator(daysToKeepStr: '365'))
