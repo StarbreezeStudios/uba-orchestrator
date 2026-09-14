@@ -22,3 +22,15 @@ The target machine must already have:
 * Administrator rights for Jenkins to create a machine-level scheduled task and firewall rule.
 
 The initiator setup remains separate. This deployment only manages the helper process and its local `UbaAgent.exe`.
+
+## Building and publishing UbaAgent
+
+`deploy/jenkins/build-uba-agent.groovy` orchestrates the synchronization, build, and publication of the Windows `UbaAgent` package. Its PowerShell implementation lives in `deploy/jenkins/sync-uba-agent.ps1`, `deploy/jenkins/build-uba-agent.ps1`, and `deploy/jenkins/publish-uba-agent.ps1`. Configure Jenkins to load the pipeline from the repository and run it on nodes labeled `uba-helper`.
+
+The job builds `UbaAgent Win64 Development` from the machine-local Perforce workspace at `D:\\jkws\\<COMPUTERNAME>\\payday3\\trunk`. It publishes a new immutable package for every Jenkins build to:
+
+`\\devopsfs.starbreeze.com\devops\Software-Installs\UnrealBuildAccelerator\UbaAgent\build-<BUILD_NUMBER>`
+
+Each package contains `UbaAgent.exe`, all sibling DLLs from its UBA binaries directory, and a `manifest.json` with SHA-256 hashes. The job never overwrites an existing package and removes a partially copied package if publishing fails.
+
+The selected `uba-helper` node must have a configured Perforce workspace, the Unreal build prerequisites, `p4.exe` available to the Jenkins service account, and write access to the DevOps software share. The pipeline synchronizes that workspace to its latest mapped changelist before every build.
