@@ -205,10 +205,13 @@ def verify_supervisor_started() -> None:
             return
         time.sleep(0.5)
     diagnostics = get_task_diagnostics()
+    supervisor_log = LOG_DIRECTORY / "supervisor.log"
+    log_tail = supervisor_log.read_text(encoding="utf-8", errors="replace")[-12000:] if supervisor_log.is_file() else "Supervisor log was not created"
     raise RuntimeError(
         f"Scheduled task {TASK_NAME} did not start the helper supervisor "
         f"(state: {diagnostics.get('state', 'missing')}, "
-        f"last result: {diagnostics.get('last_task_result', 'unknown')})"
+        f"last result: {diagnostics.get('last_task_result', 'unknown')})\n"
+        f"Supervisor log:\n{log_tail}"
     )
 
 
