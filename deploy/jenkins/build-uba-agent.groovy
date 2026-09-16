@@ -14,19 +14,19 @@ pipeline {
     stages {
         stage('Sync Perforce') {
             steps {
-                powershell script: '& "$env:WORKSPACE\\deploy\\jenkins\\sync-uba-agent.ps1"'
+                python 'deploy/jenkins/sync-uba-agent.py'
             }
         }
 
         stage('Build UBA agent') {
             steps {
-                powershell script: '& "$env:WORKSPACE\\deploy\\jenkins\\build-uba-agent.ps1"'
+                python 'deploy/jenkins/build-uba-agent.py'
             }
         }
 
         stage('Publish UBA agent') {
             steps {
-                powershell script: '& "$env:WORKSPACE\\deploy\\jenkins\\publish-uba-agent.ps1"'
+                python 'deploy/jenkins/publish-uba-agent.py'
             }
         }
     }

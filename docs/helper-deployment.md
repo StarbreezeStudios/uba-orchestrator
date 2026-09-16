@@ -1,6 +1,6 @@
 # Jenkins Helper Deployment
 
-`deploy/jenkins/deploy-helper.groovy` orchestrates installation of the UBA helper on one Windows Jenkins node. Its PowerShell implementation lives in `deploy/jenkins/deploy-helper.ps1`.
+`deploy/jenkins/deploy-helper.groovy` orchestrates installation of the UBA helper on one Windows Jenkins node. Its Python implementation lives in `deploy/jenkins/deploy-helper.py`.
 
 The helper runs as a machine-level, service-like Windows Scheduled Task. It starts at system startup, does not require an interactive login, runs as `SYSTEM`, and is configured to restart the supervisor after a failure.
 
@@ -25,9 +25,24 @@ The initiator setup remains separate. This deployment only manages the helper pr
 
 ## Building and publishing UbaAgent
 
-`deploy/jenkins/build-uba-agent.groovy` orchestrates the synchronization, build, and publication of the Windows `UbaAgent` package. Its PowerShell implementation lives in `deploy/jenkins/sync-uba-agent.ps1`, `deploy/jenkins/build-uba-agent.ps1`, and `deploy/jenkins/publish-uba-agent.ps1`. Configure Jenkins to load the pipeline from the repository and run it on nodes labeled `uba-helper`.
+`deploy/jenkins/build-uba-agent.groovy` orchestrates the synchronization, build, and publication of the Windows `UbaAgent` package. Its Python implementation lives in `deploy/jenkins/sync-uba-agent.py`, `deploy/jenkins/build-uba-agent.py`, and `deploy/jenkins/publish-uba-agent.py`. Configure Jenkins to load the pipeline from the repository and run it on nodes labeled `uba-helper`.
 
-The job builds `UbaAgent Win64 Development` from the machine-local Perforce workspace at `D:\\jkws\\<COMPUTERNAME>\\payday3\\trunk`. It publishes a new immutable package for every Jenkins build to:
+The build step uses `build-uba-agent.py`. It resolves the Perforce workspace from the node hostname and invokes the Engine build script:
+
+```bat
+D:\jkws\<COMPUTERNAME>\payday3\trunk\Engine\Build\BatchFiles\Build.bat `
+  UbaAgent Win64 Development -WaitMutex -NoHotReload
+```
+
+For a Win64 x64 build, the expected output is not directly under `Engine\Binaries\Win64`; it is:
+
+```text
+D:\jkws\<COMPUTERNAME>\payday3\trunk\Engine\Binaries\Win64\UnrealBuildAccelerator\x64\UbaAgent.exe
+```
+
+The script fails the Jenkins build if `Build.bat` returns a non-zero exit code or if that exact `UbaAgent.exe` path does not exist after the build. This makes the output path the authoritative verification point before publication.
+
+The publication step publishes a new immutable package for every Jenkins build to:
 
 `\\devopsfs.starbreeze.com\devops\Software-Installs\UnrealBuildAccelerator\UbaAgent\build-<BUILD_NUMBER>`
 

@@ -26,7 +26,7 @@ pipeline {
 
         stage('Install helper') {
             steps {
-                powershell script: '& "$env:WORKSPACE\\deploy\\jenkins\\deploy-helper.ps1"'
+                python 'deploy/jenkins/deploy-helper.py'
             }
         }
     }
