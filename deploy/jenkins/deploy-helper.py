@@ -172,7 +172,10 @@ def register_and_start_task(python_path: str, address: str) -> None:
         task_file = Path(file.name)
         file.write(task_xml)
     try:
-        run(["schtasks.exe", "/Create", "/TN", TASK_NAME, "/XML", str(task_file), "/F"])
+        result = run(["schtasks.exe", "/Create", "/TN", TASK_NAME, "/XML", str(task_file), "/F"], check=False)
+        if result.returncode != 0:
+            details = result.stderr.strip() or result.stdout.strip()
+            raise RuntimeError(f"Could not create scheduled task {TASK_NAME}: {details or result.returncode}")
     finally:
         task_file.unlink(missing_ok=True)
     run(["schtasks.exe", "/Run", "/TN", TASK_NAME])
