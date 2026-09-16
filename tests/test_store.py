@@ -154,3 +154,49 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(current.helper_id, "legacy-helper")
         self.assertEqual(len(store.helpers), 1)
         self.assertEqual(store.helpers[current.helper_id].cores, 32)
+
+    def test_helper_registration_replaces_unleased_duplicate_when_address_changes(self):
+        store = Store()
+        old = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8,
+                                     "listen_port": 1346})
+        current = store.register_helper({"helper_id": "current-helper", "hostname": "helper-1",
+                                         "address": "10.0.0.3", "cores": 32, "listen_port": 1346})
+
+        registered = store.register_helper({"hostname": "helper-1", "address": "10.0.0.3", "cores": 32,
+                                            "listen_port": 1346})
+
+        self.assertEqual(registered.helper_id, current.helper_id)
+        self.assertNotIn(old.helper_id, store.helpers)
+        self.assertEqual(len(store.helpers), 1)
+
+    def test_helper_registration_removes_historical_lease_reference_for_duplicate(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            old = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8,
+                                         "listen_port": 1346})
+            lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                        "initiator_port": 1345, "target_core_count": 8})
+            store.release_lease(lease.lease_id)
+            current = store.register_helper({"helper_id": "current-helper", "hostname": "helper-1",
+                                             "address": "10.0.0.3", "cores": 32, "listen_port": 1346})
+
+            registered = store.register_helper({"hostname": "helper-1", "address": "10.0.0.3", "cores": 32,
+                                                "listen_port": 1346})
+
+            self.assertEqual(registered.helper_id, current.helper_id)
+            self.assertNotIn(old.helper_id, store.helpers)
+            self.assertNotIn(old.helper_id, store.leases[lease.lease_id].helper_ids)
+            store.close()
+
+    def test_helper_registration_reuses_unleased_helper_when_address_changes(self):
+        store = Store()
+        previous = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8,
+                                          "listen_port": 1346})
+
+        registered = store.register_helper({"hostname": "helper-1", "address": "10.0.0.3", "cores": 8,
+                                            "listen_port": 1346})
+
+        self.assertEqual(registered.helper_id, previous.helper_id)
+        self.assertEqual(registered.address, "10.0.0.3")
+        self.assertEqual(len(store.helpers), 1)
