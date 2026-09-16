@@ -87,19 +87,19 @@ def stop_existing_helper() -> None:
         if result.returncode != 0:
             print(f"Warning: Task Scheduler returned exit code {result.returncode} while stopping {TASK_NAME}")
 
-    termination_errors: list[str] = []
-    for process in get_helper_processes():
-        process_id = str(process["ProcessId"])
-        result = run(["taskkill.exe", "/PID", process_id, "/T", "/F"], check=False)
-        if result.returncode != 0:
-            details = result.stderr.strip() or result.stdout.strip()
-            termination_errors.append(f"PID {process_id}: {details or f'exit code {result.returncode}'}")
-
     deadline = time.monotonic() + 15
+    termination_errors: list[str] = []
     while time.monotonic() < deadline:
         remaining = get_helper_processes()
         if not remaining:
             break
+        termination_errors.clear()
+        for process in remaining:
+            process_id = str(process["ProcessId"])
+            result = run(["taskkill.exe", "/PID", process_id, "/T", "/F"], check=False)
+            if result.returncode != 0:
+                details = result.stderr.strip() or result.stdout.strip()
+                termination_errors.append(f"PID {process_id}: {details or f'exit code {result.returncode}'}")
         time.sleep(0.25)
     else:
         process_ids = ", ".join(str(process["ProcessId"]) for process in remaining)
