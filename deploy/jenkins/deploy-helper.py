@@ -81,11 +81,18 @@ def get_task_state() -> str | None:
 
 
 def stop_existing_helper() -> None:
-    if get_task_state() == "Running":
+    task_state = get_task_state()
+    if task_state == "Running":
         print(f"Stopping existing scheduled task {TASK_NAME}")
         result = run(["schtasks.exe", "/End", "/TN", TASK_NAME], check=False)
         if result.returncode != 0:
             print(f"Warning: Task Scheduler returned exit code {result.returncode} while stopping {TASK_NAME}")
+    if task_state is not None:
+        print(f"Removing existing scheduled task {TASK_NAME}")
+        result = run(["schtasks.exe", "/Delete", "/TN", TASK_NAME, "/F"], check=False)
+        if result.returncode != 0:
+            details = result.stderr.strip() or result.stdout.strip()
+            raise RuntimeError(f"Could not remove scheduled task {TASK_NAME}: {details or result.returncode}")
 
     deadline = time.monotonic() + 15
     termination_errors: list[str] = []
@@ -102,9 +109,12 @@ def stop_existing_helper() -> None:
                 termination_errors.append(f"PID {process_id}: {details or f'exit code {result.returncode}'}")
         time.sleep(0.25)
     else:
-        process_ids = ", ".join(str(process["ProcessId"]) for process in remaining)
+        processes = "; ".join(
+            f"PID {process['ProcessId']} ({process.get('Name', 'unknown')}): {process.get('CommandLine', '')}"
+            for process in remaining
+        )
         details = f" ({'; '.join(termination_errors)})" if termination_errors else ""
-        raise RuntimeError(f"Could not stop existing UBA helper processes: {process_ids}{details}")
+        raise RuntimeError(f"Could not stop existing UBA helper processes: {processes}{details}")
 
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
