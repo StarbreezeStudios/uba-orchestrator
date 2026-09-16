@@ -87,9 +87,13 @@ def stop_existing_helper() -> None:
         if result.returncode != 0:
             print(f"Warning: Task Scheduler returned exit code {result.returncode} while stopping {TASK_NAME}")
 
+    termination_errors: list[str] = []
     for process in get_helper_processes():
         process_id = str(process["ProcessId"])
-        run(["taskkill.exe", "/PID", process_id, "/F"], check=False)
+        result = run(["taskkill.exe", "/PID", process_id, "/T", "/F"], check=False)
+        if result.returncode != 0:
+            details = result.stderr.strip() or result.stdout.strip()
+            termination_errors.append(f"PID {process_id}: {details or f'exit code {result.returncode}'}")
 
     deadline = time.monotonic() + 15
     while time.monotonic() < deadline:
@@ -99,7 +103,8 @@ def stop_existing_helper() -> None:
         time.sleep(0.25)
     else:
         process_ids = ", ".join(str(process["ProcessId"]) for process in remaining)
-        raise RuntimeError(f"Could not stop existing UBA helper processes: {process_ids}")
+        details = f" ({'; '.join(termination_errors)})" if termination_errors else ""
+        raise RuntimeError(f"Could not stop existing UBA helper processes: {process_ids}{details}")
 
     deadline = time.monotonic() + 30
     while time.monotonic() < deadline:
