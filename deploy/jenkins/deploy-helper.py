@@ -161,12 +161,12 @@ def register_and_start_task(python_path: str, address: str) -> None:
     with supervisor_log.open("a", encoding="utf-8") as log_file:
         log_file.write(f"[{time.strftime('%Y-%m-%dT%H:%M:%S%z')}] Starting helper supervisor\n")
 
-    arguments = subprocess.list2cmdline([
-        python_path, "-u", str(AGENT_SCRIPT), "--orchestrator", ORCHESTRATOR_URL,
+    supervisor_arguments = subprocess.list2cmdline([
+        "-u", str(AGENT_SCRIPT), "--orchestrator", ORCHESTRATOR_URL,
         "--uba-agent", str(UBA_AGENT), "--address", address,
         "--listen-port", str(LISTEN_PORT), "--log-dir", str(LOG_DIRECTORY),
     ])
-    command_arguments = f'/d /c "{arguments} 1>> \\"{supervisor_log}\\" 2>&1"'
+    command_arguments = f'/d /c ""{python_path}" {supervisor_arguments} 1>> "{supervisor_log}" 2>&1"'
     task_xml = f'''<?xml version="1.0" encoding="UTF-16"?>
 <Task version="1.4" xmlns="http://schemas.microsoft.com/windows/2004/02/mit/task">
   <Triggers><BootTrigger><Enabled>true</Enabled></BootTrigger></Triggers>
