@@ -71,6 +71,19 @@ def get_helper_processes() -> list[dict[str, object]]:
     return powershell_json(script)
 
 
+def get_task_diagnostics() -> dict[str, object]:
+    script = f"""
+        $task = Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue
+        if ($task) {{
+            $info = Get-ScheduledTaskInfo -TaskName '{TASK_NAME}'
+            [PSCustomObject]@{{ state = [string]$task.State; last_task_result = $info.LastTaskResult }} |
+                ConvertTo-Json -Compress
+        }}
+    """
+    result = powershell_json(script)
+    return result[0] if result else {}
+
+
 def get_task_state() -> str | None:
     result = run([
         "powershell.exe", "-NoProfile", "-Command",
@@ -181,6 +194,24 @@ def register_and_start_task(python_path: str, address: str) -> None:
     run(["schtasks.exe", "/Run", "/TN", TASK_NAME])
 
 
+def verify_supervisor_started() -> None:
+    deadline = time.monotonic() + 15
+    while time.monotonic() < deadline:
+        supervisors = [process for process in get_helper_processes()
+                       if str(process.get("Name", "")).lower() != "ubaagent.exe"]
+        if supervisors:
+            process_ids = ", ".join(str(process["ProcessId"]) for process in supervisors)
+            print(f"Helper supervisor started with process ID(s): {process_ids}")
+            return
+        time.sleep(0.5)
+    diagnostics = get_task_diagnostics()
+    raise RuntimeError(
+        f"Scheduled task {TASK_NAME} did not start the helper supervisor "
+        f"(state: {diagnostics.get('state', 'missing')}, "
+        f"last result: {diagnostics.get('last_task_result', 'unknown')})"
+    )
+
+
 def get_registered_helper(hostname: str) -> dict[str, object] | None:
     with urllib.request.urlopen(f"{ORCHESTRATOR_URL}/api/v1/helpers", timeout=10) as response:
         helpers = json.load(response)
@@ -232,6 +263,7 @@ def main() -> int:
     install_files(source_script)
     configure_firewall()
     register_and_start_task(python_path, address)
+    verify_supervisor_started()
     helper = verify_registration()
     print(f"Registered helper address: {helper.get('address')}:{helper.get('listen_port')}")
     print(json.dumps(helper, indent=2))
