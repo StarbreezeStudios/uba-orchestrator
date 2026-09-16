@@ -62,7 +62,7 @@ def powershell_json(script: str) -> list[dict[str, object]]:
 def get_helper_processes() -> list[dict[str, object]]:
     script = f"""
         Get-CimInstance Win32_Process | Where-Object {{
-            $_.CommandLine -and (
+            $_.Name -ine 'powershell.exe' -and $_.CommandLine -and (
                 $_.CommandLine -like '*helper-agent*agent.py*' -or
                 ($_.Name -ieq 'UbaAgent.exe' -and $_.CommandLine -match '-listen={LISTEN_PORT}')
             )
