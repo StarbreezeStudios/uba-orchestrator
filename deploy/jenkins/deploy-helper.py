@@ -72,12 +72,12 @@ def get_helper_processes() -> list[dict[str, object]]:
 
 
 def get_task_state() -> str | None:
-    result = run(["schtasks.exe", "/Query", "/TN", TASK_NAME, "/FO", "CSV", "/NH"], check=False)
-    if result.returncode != 0:
-        return None
-    # CSV column positions are localized, but the last column is always the task state.
-    row = result.stdout.strip().rsplit(",", 1)
-    return row[-1].strip().strip('"') if len(row) == 2 else None
+    result = run([
+        "powershell.exe", "-NoProfile", "-Command",
+        f"$task = Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue; if ($task) {{ $task.State }}",
+    ], check=False)
+    state = result.stdout.strip()
+    return state or None
 
 
 def stop_existing_helper() -> None:
