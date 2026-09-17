@@ -30,6 +30,7 @@ class Helper:
     platform: str
     uba_version: str
     listen_port: int
+    enabled: bool = True
     state: str = "idle"
     last_seen: datetime = field(default_factory=now)
     lease_id: str | None = None
@@ -94,6 +95,7 @@ class Store:
                 platform TEXT NOT NULL,
                 uba_version TEXT NOT NULL,
                 listen_port INTEGER NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
                 state TEXT NOT NULL,
                 last_seen TEXT NOT NULL,
                 lease_id TEXT,
@@ -116,6 +118,9 @@ class Store:
             );
             """
         )
+        columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(helpers)")}
+        if "enabled" not in columns:
+            self._connection.execute("ALTER TABLE helpers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
         self._connection.commit()
 
     def _load(self) -> None:
@@ -126,7 +131,8 @@ class Store:
             self.helpers[row["helper_id"]] = Helper(
                 helper_id=row["helper_id"], hostname=row["hostname"], address=row["address"],
                 cores=row["cores"], memory_bytes=row["memory_bytes"], platform=row["platform"],
-                uba_version=row["uba_version"], listen_port=row["listen_port"], state=row["state"],
+                uba_version=row["uba_version"], listen_port=row["listen_port"], enabled=bool(row["enabled"]),
+                state=row["state"],
                 last_seen=parse_datetime(row["last_seen"]), lease_id=row["lease_id"],
                 agent_ready=bool(row["agent_ready"]),
             )
@@ -150,9 +156,12 @@ class Store:
         self._connection.execute("DELETE FROM helpers")
         for helper in self.helpers.values():
             self._connection.execute(
-                "INSERT INTO helpers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                """INSERT INTO helpers
+                   (helper_id, hostname, address, cores, memory_bytes, platform, uba_version, listen_port,
+                    enabled, state, last_seen, lease_id, agent_ready)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (helper.helper_id, helper.hostname, helper.address, helper.cores, helper.memory_bytes,
-                 helper.platform, helper.uba_version, helper.listen_port, helper.state,
+                 helper.platform, helper.uba_version, helper.listen_port, int(helper.enabled), helper.state,
                  helper.last_seen.isoformat(), helper.lease_id, int(helper.agent_ready)),
             )
         for lease in self.leases.values():
@@ -183,8 +192,8 @@ class Store:
         timestamp = now()
         changed = False
         for helper in self.helpers.values():
-            if timestamp - helper.last_seen > HELPER_OFFLINE_AFTER and helper.state != "offline":
-                helper.state = "offline"
+            if timestamp - helper.last_seen > HELPER_OFFLINE_AFTER and helper.state not in ("offline", "disabled"):
+                helper.state = "offline" if helper.enabled else "disabled"
                 helper.lease_id = None
                 helper.agent_ready = False
                 changed = True
@@ -195,7 +204,7 @@ class Store:
                 for helper in self.helpers.values():
                     if helper.lease_id == lease.lease_id:
                         helper.lease_id = None
-                        helper.state = "idle"
+                        helper.state = "idle" if helper.enabled else "disabled"
                         helper.agent_ready = False
         return changed
 
@@ -208,7 +217,7 @@ class Store:
             for helper in self.helpers.values():
                 if helper.lease_id == lease.lease_id:
                     helper.lease_id = None
-                    helper.state = "idle"
+                    helper.state = "idle" if helper.enabled else "disabled"
                     helper.agent_ready = False
 
     def reap(self) -> None:
@@ -254,7 +263,7 @@ class Store:
                         if key in data:
                             setattr(helper, key, data[key])
                     helper.last_seen = now()
-                    if helper.state == "offline":
+                    if helper.state == "offline" and helper.enabled:
                         helper.state = "idle"
                 self._commit()
                 return helper
@@ -268,14 +277,15 @@ class Store:
             try:
                 helper = self.helpers[helper_id]
                 helper.last_seen = now()
-                if helper.state == "offline":
+                if helper.state == "offline" and helper.enabled:
                     helper.state = "idle"
                 if data.get("agent_ready") is not None:
                     helper.agent_ready = bool(data["agent_ready"])
                 if data.get("agent_port"):
                     helper.listen_port = int(data["agent_port"])
                 if helper.lease_id and helper.agent_ready:
-                    helper.state = "active"
+                    if helper.enabled:
+                        helper.state = "active"
                     self.leases[helper.lease_id].state = "active"
                 self._commit()
                 return helper
@@ -304,7 +314,7 @@ class Store:
             try:
                 self._reap_locked()
                 required = int(data["target_core_count"])
-                candidates = [h for h in self.helpers.values() if h.state == "idle" and h.cores > 0]
+                candidates = [h for h in self.helpers.values() if h.enabled and h.state == "idle" and h.cores > 0]
                 candidates.sort(key=lambda h: h.cores, reverse=True)
                 selected: list[Helper] = []
                 capacity = 0
@@ -338,10 +348,29 @@ class Store:
                 for helper in self.helpers.values():
                     if helper.lease_id == lease_id:
                         helper.lease_id = None
-                        helper.state = "idle"
+                        helper.state = "idle" if helper.enabled else "disabled"
                         helper.agent_ready = False
                 self._commit()
                 return lease
+            except Exception:
+                self._rollback()
+                raise
+
+    def set_helper_enabled(self, helper_id: str, enabled: bool) -> Helper:
+        with self.lock:
+            self._begin()
+            try:
+                helper = self.helpers[helper_id]
+                helper.enabled = enabled
+                if enabled:
+                    helper.state = "idle" if now() - helper.last_seen <= HELPER_OFFLINE_AFTER else "offline"
+                elif helper.lease_id:
+                    helper.state = "draining"
+                else:
+                    helper.state = "disabled"
+                    helper.agent_ready = False
+                self._commit()
+                return helper
             except Exception:
                 self._rollback()
                 raise

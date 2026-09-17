@@ -1,4 +1,5 @@
 import sys
+import sqlite3
 import tempfile
 import threading
 import unittest
@@ -96,6 +97,72 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(store.helpers[helper.helper_id].state, "reserved")
         store.release_lease(lease.lease_id)
         self.assertEqual(store.helpers[helper.helper_id].state, "idle")
+
+    def test_disabled_helper_is_not_selected_and_can_be_enabled(self):
+        store = Store()
+        helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+        store.set_helper_enabled(helper.helper_id, False)
+
+        self.assertEqual(store.helpers[helper.helper_id].state, "disabled")
+        self.assertIsNone(store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                               "initiator_port": 1345, "target_core_count": 4}))
+
+        store.set_helper_enabled(helper.helper_id, True)
+        self.assertEqual(store.helpers[helper.helper_id].state, "idle")
+        self.assertIsNotNone(store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                                  "initiator_port": 1345, "target_core_count": 4}))
+
+    def test_active_helper_drains_until_its_lease_is_released(self):
+        store = Store()
+        helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+        lease = store.create_lease({"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                                    "initiator_port": 1345, "target_core_count": 4})
+        store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+
+        store.set_helper_enabled(helper.helper_id, False)
+        self.assertEqual(store.helpers[helper.helper_id].state, "draining")
+        self.assertEqual(store.helpers[helper.helper_id].lease_id, lease.lease_id)
+
+        store.release_lease(lease.lease_id)
+        self.assertEqual(store.helpers[helper.helper_id].state, "disabled")
+        self.assertIsNone(store.helpers[helper.helper_id].lease_id)
+
+    def test_disabled_state_survives_store_recreation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+            store.set_helper_enabled(helper.helper_id, False)
+            store.close()
+
+            restarted = Store(database)
+            self.assertFalse(restarted.helpers[helper.helper_id].enabled)
+            self.assertEqual(restarted.helpers[helper.helper_id].state, "disabled")
+            restarted.close()
+
+    def test_existing_database_is_migrated_with_enabled_helpers(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            connection = sqlite3.connect(database)
+            connection.executescript(
+                """
+                CREATE TABLE helpers (
+                    helper_id TEXT PRIMARY KEY, hostname TEXT NOT NULL, address TEXT NOT NULL,
+                    cores INTEGER NOT NULL, memory_bytes INTEGER NOT NULL, platform TEXT NOT NULL,
+                    uba_version TEXT NOT NULL, listen_port INTEGER NOT NULL, state TEXT NOT NULL,
+                    last_seen TEXT NOT NULL, lease_id TEXT, agent_ready INTEGER NOT NULL
+                );
+                INSERT INTO helpers VALUES
+                    ('helper-1', 'helper-1', '10.0.0.2', 8, 0, 'windows', 'unknown', 1346,
+                     'idle', '2020-01-01T00:00:00+00:00', NULL, 0);
+                """
+            )
+            connection.commit()
+            connection.close()
+
+            store = Store(database)
+            self.assertTrue(store.helpers["helper-1"].enabled)
+            store.close()
 
 
     def test_lease_is_not_created_when_capacity_is_insufficient(self):

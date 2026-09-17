@@ -53,7 +53,9 @@ if FastAPI is not None:
     th { background: #374151; color: #f9fafb; }
     .idle, .active { color: #86efac; }
     .reserved, .pending { color: #fde68a; }
-    .offline, .expired { color: #fca5a5; }
+    .offline, .disabled, .expired { color: #fca5a5; }
+    .draining { color: #fdba74; }
+    button { background: #374151; border: 1px solid #6b7280; border-radius: 4px; color: #f9fafb; cursor: pointer; padding: 5px 8px; }
     code { color: #bfdbfe; }
   </style>
 </head>
@@ -62,8 +64,8 @@ if FastAPI is not None:
   <div class="meta">Refreshing every 3 seconds · Last update: <span id="updated">never</span></div>
   <h2>Helpers</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Lease</th><th>Last heartbeat</th></tr></thead>
-    <tbody id="helpers"><tr><td colspan="7">Loading...</td></tr></tbody>
+    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Lease</th><th>Last heartbeat</th><th>Action</th></tr></thead>
+    <tbody id="helpers"><tr><td colspan="8">Loading...</td></tr></tbody>
   </table></div>
   <h2>Initiators</h2>
   <div class="table-wrap"><table>
@@ -73,7 +75,7 @@ if FastAPI is not None:
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
-    const agentState = helper => helper.state === 'offline' ? 'offline'
+    const agentState = helper => ['offline', 'disabled'].includes(helper.state) ? 'offline'
       : helper.agent_ready ? 'ready'
       : helper.state === 'reserved' ? 'starting'
       : 'idle';
@@ -88,8 +90,9 @@ if FastAPI is not None:
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
           <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
-          <td><code>${esc(h.lease_id || '-')}</code></td><td>${esc(h.last_seen)}</td></tr>`).join('')
-          : '<tr><td colspan="7">No helpers registered</td></tr>';
+          <td><code>${esc(h.lease_id || '-')}</code></td><td>${esc(h.last_seen)}</td>
+          <td><button data-helper-id="${esc(h.helper_id)}" data-enabled="${h.enabled ? 'false' : 'true'}">${h.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')
+          : '<tr><td colspan="8">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
           <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
@@ -101,6 +104,22 @@ if FastAPI is not None:
         document.querySelector('#updated').textContent = `error: ${error}`;
       }
     };
+    document.querySelector('#helpers').addEventListener('click', async event => {
+      const button = event.target.closest('button[data-helper-id]');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/v1/helpers/${encodeURIComponent(button.dataset.helperId)}/enabled`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({enabled: button.dataset.enabled === 'true'})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        await refresh();
+      } catch (error) {
+        document.querySelector('#updated').textContent = `error: ${error}`;
+        button.disabled = false;
+      }
+    });
     refresh();
     setInterval(refresh, 3000);
   </script>
@@ -119,6 +138,16 @@ if FastAPI is not None:
             result = store.helper_view(helper)
             result["lease_id"] = helper.lease_id
             return result
+        except KeyError as error:
+            raise HTTPException(404, "Unknown helper") from error
+
+    @app.post("/api/v1/helpers/{helper_id}/enabled")
+    def set_helper_enabled(helper_id: str, payload: dict) -> dict:
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            raise HTTPException(400, "enabled must be a boolean")
+        try:
+            return store.helper_view(store.set_helper_enabled(helper_id, enabled))
         except KeyError as error:
             raise HTTPException(404, "Unknown helper") from error
 
