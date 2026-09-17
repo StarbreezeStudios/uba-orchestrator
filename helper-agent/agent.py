@@ -14,6 +14,14 @@ import urllib.request
 from pathlib import Path
 
 
+def calculate_helper_cores(logical_cores: int) -> int:
+    """Reserve a bounded share of logical cores for Windows and local services."""
+    if logical_cores < 1:
+        raise ValueError("logical core count must be positive")
+    system_reserve = min(max((logical_cores + 9) // 10, 2), 8)
+    return max(logical_cores - system_reserve, 1)
+
+
 def request(url: str, method: str, payload: dict | None = None) -> dict:
     body = json.dumps(payload).encode() if payload is not None else None
     req = urllib.request.Request(url, data=body, method=method, headers={"Content-Type": "application/json"})
@@ -48,7 +56,9 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=3.0)
     args = parser.parse_args()
     base = args.orchestrator.rstrip("/")
-    identity = {"hostname": socket.gethostname(), "address": args.address, "cores": os.cpu_count() or 1,
+    logical_cores = os.cpu_count() or 1
+    helper_cores = calculate_helper_cores(logical_cores)
+    identity = {"hostname": socket.gethostname(), "address": args.address, "cores": helper_cores,
                 "memory_bytes": 0, "platform": platform.system().lower(), "uba_version": "unknown",
                 "listen_port": args.listen_port}
     helper_id: str | None = None
@@ -101,7 +111,7 @@ def main() -> int:
                 stdout = open(Path(args.log_dir) / f"uba-agent-{lease_id}.stdout.log", "a", encoding="utf-8")
                 stderr = open(Path(args.log_dir) / f"uba-agent-{lease_id}.stderr.log", "a", encoding="utf-8")
                 log_handles = (stdout, stderr)
-                process = subprocess.Popen([args.uba_agent, f"-listen={args.listen_port}"],
+                process = subprocess.Popen([args.uba_agent, f"-listen={args.listen_port}", f"-maxcpu={helper_cores}"],
                                             stdout=stdout, stderr=stderr, text=True)
                 print(f"Started UbaAgent for lease {lease_id}", flush=True)
             if process and process.poll() is not None:
