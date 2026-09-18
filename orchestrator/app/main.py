@@ -70,8 +70,8 @@ if FastAPI is not None:
   </table></div>
   <h2>Initiators</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Initiator</th><th>Address</th><th>Requested cores</th><th>State</th><th>Helpers</th><th>Lease</th><th>Expires</th></tr></thead>
-    <tbody id="initiators"><tr><td colspan="7">Loading...</td></tr></tbody>
+    <thead><tr><th>Initiator</th><th>Address</th><th>Requested cores</th><th>State</th><th>Helpers</th><th>Expires</th></tr></thead>
+    <tbody id="initiators"><tr><td colspan="6">Loading...</td></tr></tbody>
   </table></div>
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -108,8 +108,8 @@ if FastAPI is not None:
           <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
           <td>${i.helpers.map(h => `${esc(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
-          <td><code>${esc(i.lease_id)}</code></td><td>${esc(i.expires_at)}</td></tr>`).join('')
-          : '<tr><td colspan="7">No active initiators</td></tr>';
+          <td>${esc(i.expires_at)}</td></tr>`).join('')
+          : '<tr><td colspan="6">No active initiators</td></tr>';
         document.querySelector('#updated').textContent = new Date().toLocaleString();
       } catch (error) {
         document.querySelector('#updated').textContent = `error: ${error}`;
