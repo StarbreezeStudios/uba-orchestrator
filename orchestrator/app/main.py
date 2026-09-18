@@ -64,8 +64,8 @@ if FastAPI is not None:
   <div class="meta">Refreshing every 3 seconds · Last update: <span id="updated">never</span></div>
   <h2>Helpers</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Lease</th><th>Last heartbeat</th><th>Action</th></tr></thead>
-    <tbody id="helpers"><tr><td colspan="8">Loading...</td></tr></tbody>
+    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Last heartbeat</th><th>Action</th></tr></thead>
+    <tbody id="helpers"><tr><td colspan="7">Loading...</td></tr></tbody>
   </table></div>
   <h2>Initiators</h2>
   <div class="table-wrap"><table>
@@ -90,9 +90,9 @@ if FastAPI is not None:
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
           <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
-          <td><code>${esc(h.lease_id || '-')}</code></td><td>${esc(h.last_seen)}</td>
+          <td>${esc(h.last_seen)}</td>
           <td><button data-helper-id="${esc(h.helper_id)}" data-enabled="${h.enabled ? 'false' : 'true'}">${h.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')
-          : '<tr><td colspan="8">No helpers registered</td></tr>';
+          : '<tr><td colspan="7">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
           <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
