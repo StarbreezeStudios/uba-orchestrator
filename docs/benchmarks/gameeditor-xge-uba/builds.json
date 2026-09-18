@@ -1,0 +1,1033 @@
+{
+  "schemaVersion": 1,
+  "jobUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/",
+  "collectedAtUtc": "2026-09-18T08:28:28.992Z",
+  "baselineWindow": {
+    "start": "2026-09-08T00:00:00+01:00",
+    "endExclusive": "2026-09-18T00:00:00+01:00",
+    "timezone": "Atlantic/Canary"
+  },
+  "futureWindow": {
+    "start": "2026-09-19T00:00:00+01:00",
+    "endExclusive": "2026-09-29T00:00:00+01:00",
+    "timezone": "Atlantic/Canary"
+  },
+  "records": [
+    {
+      "id": "791",
+      "result": "SUCCESS",
+      "durationMs": 6931833,
+      "timestamp": "2026-09-10T01:03:05.521Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/791/",
+      "nightlyBuild": 87,
+      "fullBuild": 261,
+      "node": "jk-win-004",
+      "changelist": "991805",
+      "clean": true,
+      "cohort": "xge_baseline",
+      "primaryExecutor": "XGE",
+      "primaryActions": 4832,
+      "executorTimes": [
+        {
+          "executor": "XGE",
+          "seconds": 690.89
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 3.04
+        }
+      ],
+      "primaryExecutorSeconds": 690.89,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789002204121,
+          "durationMillis": 4017,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789002221926,
+          "durationMillis": 928,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789002222904,
+          "durationMillis": 69959,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789002292924,
+          "durationMillis": 4706037,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789006999029,
+          "durationMillis": 2802,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789007001885,
+          "durationMillis": 81866,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "86",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789007083833,
+          "durationMillis": 879368,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "94",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789007963260,
+          "durationMillis": 676368,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789008639674,
+          "durationMillis": 172481,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "121",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789008812210,
+          "durationMillis": 5724,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "143",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789008817980,
+          "durationMillis": 262572,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "160",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789009080605,
+          "durationMillis": 40116,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 879368,
+      "toolsStageMs": 676368,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/791/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-791/07-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 261",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 87",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-10T01:03:44.589Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-10T01:04:52.986Z] Executing Task: pull_changes --changelist='991805' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-10T02:24:43.943Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild"
+      ],
+      "executorEvidence": [
+        "2026-09-10 04:27:25,949 - INFO - Using XGE executor to run 4832 action(s)",
+        "2026-09-10 04:27:26,219 - INFO - Distributing 4832 actions to XGE",
+        "2026-09-10 04:38:56,848 - INFO - Total time in XGE executor: 690.89 seconds",
+        "2026-09-10 04:39:00,654 - INFO - Total execution time: 746.15 seconds",
+        "2026-09-10 04:39:06,822 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-10 04:39:09,859 - INFO - Total time in Unreal Build Accelerator executor: 3.04 seconds",
+        "2026-09-10 04:39:09,864 - INFO - Total execution time: 5.33 seconds"
+      ]
+    },
+    {
+      "id": "808",
+      "result": "SUCCESS",
+      "durationMs": 2784923,
+      "timestamp": "2026-09-11T01:01:59.453Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/808/",
+      "nightlyBuild": 88,
+      "fullBuild": 264,
+      "node": "jk-win-004",
+      "changelist": "992302",
+      "clean": true,
+      "cohort": "xge_baseline",
+      "primaryExecutor": "XGE",
+      "primaryActions": 4832,
+      "executorTimes": [
+        {
+          "executor": "XGE",
+          "seconds": 696.66
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 2.42
+        }
+      ],
+      "primaryExecutorSeconds": 696.66,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789088538184,
+          "durationMillis": 3443,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789088552384,
+          "durationMillis": 1135,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789088553573,
+          "durationMillis": 58175,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789088611798,
+          "durationMillis": 571248,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789089183092,
+          "durationMillis": 2138,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789089185275,
+          "durationMillis": 82233,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "86",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789089267576,
+          "durationMillis": 873781,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "94",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789090141409,
+          "durationMillis": 676391,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789090817881,
+          "durationMillis": 172693,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "121",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789090990618,
+          "durationMillis": 5805,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "143",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789090996500,
+          "durationMillis": 263380,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "160",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789091259923,
+          "durationMillis": 44013,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 873781,
+      "toolsStageMs": 676391,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/808/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-808/07-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 264",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 88",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-11T01:02:33.676Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-11T01:03:36.191Z] Executing Task: pull_changes --changelist='992302' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-11T01:14:27.646Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild"
+      ],
+      "executorEvidence": [
+        "2026-09-11 03:16:59,281 - INFO - Using XGE executor to run 4832 action(s)",
+        "2026-09-11 03:16:59,544 - INFO - Distributing 4832 actions to XGE",
+        "2026-09-11 03:28:35,950 - INFO - Total time in XGE executor: 696.66 seconds",
+        "2026-09-11 03:28:38,884 - INFO - Total execution time: 751.77 seconds",
+        "2026-09-11 03:28:44,555 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-11 03:28:46,973 - INFO - Total time in Unreal Build Accelerator executor: 2.42 seconds",
+        "2026-09-11 03:28:46,978 - INFO - Total execution time: 4.53 seconds"
+      ]
+    },
+    {
+      "id": "820",
+      "result": "SUCCESS",
+      "durationMs": 2800223,
+      "timestamp": "2026-09-14T01:02:51.841Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/820/",
+      "nightlyBuild": 89,
+      "fullBuild": 267,
+      "node": "jk-win-004",
+      "changelist": "992721",
+      "clean": true,
+      "cohort": "xge_baseline",
+      "primaryExecutor": "XGE",
+      "primaryActions": 4832,
+      "executorTimes": [
+        {
+          "executor": "XGE",
+          "seconds": 629.85
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 2.81
+        }
+      ],
+      "primaryExecutorSeconds": 629.85,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789347790763,
+          "durationMillis": 24399,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789347823781,
+          "durationMillis": 3255,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789347827080,
+          "durationMillis": 51650,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789347878782,
+          "durationMillis": 582925,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789348461754,
+          "durationMillis": 2781,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789348464585,
+          "durationMillis": 81664,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "86",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789348546295,
+          "durationMillis": 810715,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "94",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789349357057,
+          "durationMillis": 706046,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789350063152,
+          "durationMillis": 172490,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "121",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789350235690,
+          "durationMillis": 5796,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "143",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789350241554,
+          "durationMillis": 277783,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "160",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789350519402,
+          "durationMillis": 46103,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 810715,
+      "toolsStageMs": 706046,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/820/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-820/07-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 267",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 89",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-14T01:03:47.159Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-14T01:04:38.847Z] Executing Task: pull_changes --changelist='992721' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-14T01:15:46.381Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild"
+      ],
+      "executorEvidence": [
+        "2026-09-14 03:18:22,354 - INFO - Using XGE executor to run 4832 action(s)",
+        "2026-09-14 03:18:22,608 - INFO - Distributing 4832 actions to XGE",
+        "2026-09-14 03:28:52,250 - INFO - Total time in XGE executor: 629.85 seconds",
+        "2026-09-14 03:28:54,299 - INFO - Total execution time: 685.52 seconds",
+        "2026-09-14 03:28:59,341 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-14 03:29:02,153 - INFO - Total time in Unreal Build Accelerator executor: 2.81 seconds",
+        "2026-09-14 03:29:02,157 - INFO - Total execution time: 4.70 seconds"
+      ]
+    },
+    {
+      "id": "835",
+      "result": "SUCCESS",
+      "durationMs": 5169762,
+      "timestamp": "2026-09-15T01:15:10.035Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/835/",
+      "nightlyBuild": 90,
+      "fullBuild": 272,
+      "node": "jk-win-004",
+      "changelist": "993407",
+      "clean": true,
+      "cohort": "xge_baseline",
+      "primaryExecutor": "XGE",
+      "primaryActions": 4832,
+      "executorTimes": [
+        {
+          "executor": "XGE",
+          "seconds": 1732.61
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 2.82
+        }
+      ],
+      "primaryExecutorSeconds": 1732.61,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789435074975,
+          "durationMillis": 51672,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789435287682,
+          "durationMillis": 58721,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789435346503,
+          "durationMillis": 256283,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789435602913,
+          "durationMillis": 1067573,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789436670557,
+          "durationMillis": 2270,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789436672879,
+          "durationMillis": 89250,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "86",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789436762191,
+          "durationMillis": 1938967,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "94",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789438705878,
+          "durationMillis": 781215,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789439487154,
+          "durationMillis": 217558,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "121",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789439704774,
+          "durationMillis": 6569,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "143",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789439711418,
+          "durationMillis": 296482,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "160",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789440007946,
+          "durationMillis": 71742,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 1938967,
+      "toolsStageMs": 781215,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/835/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-835/07-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 272",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 90",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-15T01:22:51.224Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-15T01:26:43.082Z] Executing Task: pull_changes --changelist='993407' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-15T01:46:04.707Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild"
+      ],
+      "executorEvidence": [
+        "2026-09-15 03:48:36,103 - INFO - Using XGE executor to run 4832 action(s)",
+        "2026-09-15 03:48:36,374 - INFO - Distributing 4832 actions to XGE",
+        "2026-09-15 04:17:28,750 - INFO - Total time in XGE executor: 1732.61 seconds",
+        "2026-09-15 04:17:37,319 - INFO - Total execution time: 1795.20 seconds",
+        "2026-09-15 04:17:42,977 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-15 04:17:45,799 - INFO - Total time in Unreal Build Accelerator executor: 2.82 seconds",
+        "2026-09-15 04:17:45,804 - INFO - Total execution time: 4.85 seconds"
+      ]
+    },
+    {
+      "id": "854",
+      "result": "SUCCESS",
+      "durationMs": 6777613,
+      "timestamp": "2026-09-16T01:11:00.791Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/854/",
+      "nightlyBuild": 91,
+      "fullBuild": 276,
+      "node": "jk-win-004",
+      "changelist": "994333",
+      "clean": true,
+      "cohort": "xge_baseline",
+      "primaryExecutor": "XGE",
+      "primaryActions": 4836,
+      "executorTimes": [
+        {
+          "executor": "XGE",
+          "seconds": 3705.67
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 3.13
+        }
+      ],
+      "primaryExecutorSeconds": 3705.67,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789521160348,
+          "durationMillis": 52451,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789521268167,
+          "durationMillis": 9595,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789521280588,
+          "durationMillis": 460739,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789521741378,
+          "durationMillis": 607315,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789522348740,
+          "durationMillis": 39613,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789522388419,
+          "durationMillis": 98326,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "86",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789522486962,
+          "durationMillis": 3879226,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "94",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789526369077,
+          "durationMillis": 735981,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789527105156,
+          "durationMillis": 198593,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "121",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789527303821,
+          "durationMillis": 54278,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "143",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789527358182,
+          "durationMillis": 291053,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "160",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789527649302,
+          "durationMillis": 108012,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 3879226,
+      "toolsStageMs": 735981,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/854/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-854/07-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 276",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 91",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-16T01:14:40.724Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-16T01:22:21.442Z] Executing Task: pull_changes --changelist='994333' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-16T01:34:47.046Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild"
+      ],
+      "executorEvidence": [
+        "2026-09-16 03:37:20,286 - INFO - Using XGE executor to run 4836 action(s)",
+        "2026-09-16 03:37:20,581 - INFO - Distributing 4836 actions to XGE",
+        "2026-09-16 04:39:06,001 - INFO - Total time in XGE executor: 3705.67 seconds",
+        "2026-09-16 04:39:11,905 - INFO - Total execution time: 3765.91 seconds",
+        "2026-09-16 04:39:18,897 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-16 04:39:22,031 - INFO - Total time in Unreal Build Accelerator executor: 3.13 seconds",
+        "2026-09-16 04:39:22,037 - INFO - Total execution time: 5.91 seconds"
+      ]
+    },
+    {
+      "id": "871",
+      "result": "SUCCESS",
+      "durationMs": 4882351,
+      "timestamp": "2026-09-17T01:10:00.675Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/871/",
+      "nightlyBuild": 92,
+      "fullBuild": 281,
+      "node": "jk-win-004",
+      "changelist": "995235",
+      "clean": true,
+      "cohort": "uba_precollection",
+      "primaryExecutor": "Unreal Build Accelerator",
+      "primaryActions": 4836,
+      "executorTimes": [
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 1548.91
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 2.52
+        }
+      ],
+      "primaryExecutorSeconds": 1548.91,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789607676064,
+          "durationMillis": 2415,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789607750788,
+          "durationMillis": 7286,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789607758171,
+          "durationMillis": 274991,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789608097171,
+          "durationMillis": 662607,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789608759832,
+          "durationMillis": 2897,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789608762789,
+          "durationMillis": 116099,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "98",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789608879008,
+          "durationMillis": 1827349,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789610773896,
+          "durationMillis": 751971,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "118",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789611525980,
+          "durationMillis": 199321,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "133",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789611725405,
+          "durationMillis": 116281,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "155",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789611841854,
+          "durationMillis": 281401,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "172",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789612125479,
+          "durationMillis": 163155,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 1827349,
+      "toolsStageMs": 751971,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/871/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-871/09-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 281",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 92",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "ERROR: node block appears to be neither running nor scheduled; will cancel if this condition persists",
+        "[2026-09-17T01:15:58.296Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-17T01:22:44.706Z] Executing Task: pull_changes --changelist='995235' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-17T01:34:39.140Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild -useUBA",
+        "[2026-09-17T01:42:49.492Z] ERROR - Compile [x64] Module.MovieScene.5.cpp [RemoteExecutor: JK-WIN-041]: Exited with error code 9666 (UBA error). This action will retry locally"
+      ],
+      "executorEvidence": [
+        "2026-09-17 03:37:14,470 - INFO - Using Unreal Build Accelerator executor to run 4836 action(s)",
+        "2026-09-17 03:42:39,724 - ERROR - Compile [x64] Module.MovieScene.5.cpp [RemoteExecutor: JK-WIN-041]: Exited with error code 9666 (UBA error). This action will retry locally",
+        "2026-09-17 04:03:03,432 - INFO - Total time in Unreal Build Accelerator executor: 1548.91 seconds",
+        "2026-09-17 04:03:05,253 - INFO - Total execution time: 1606.11 seconds",
+        "2026-09-17 04:03:10,744 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-17 04:03:13,267 - INFO - Total time in Unreal Build Accelerator executor: 2.52 seconds",
+        "2026-09-17 04:03:13,272 - INFO - Total execution time: 4.82 seconds"
+      ]
+    },
+    {
+      "id": "886",
+      "result": "SUCCESS",
+      "durationMs": 3494434,
+      "timestamp": "2026-09-18T01:03:24.940Z",
+      "url": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/886/",
+      "nightlyBuild": 93,
+      "fullBuild": 284,
+      "node": "jk-win-004",
+      "changelist": "995901",
+      "clean": true,
+      "cohort": "uba_precollection",
+      "primaryExecutor": "Unreal Build Accelerator",
+      "primaryActions": 4836,
+      "executorTimes": [
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 955.82
+        },
+        {
+          "executor": "Unreal Build Accelerator",
+          "seconds": 2.53
+        }
+      ],
+      "primaryExecutorSeconds": 955.82,
+      "stages": [
+        {
+          "id": "6",
+          "name": "Declarative: Checkout SCM",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789693451089,
+          "durationMillis": 23338,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "23",
+          "name": "Init",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789693487371,
+          "durationMillis": 1268,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "34",
+          "name": "Clean Code",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789693488685,
+          "durationMillis": 76408,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "58",
+          "name": "Pull Changes",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789693565183,
+          "durationMillis": 570537,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "70",
+          "name": "Apply Configuration",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789694135766,
+          "durationMillis": 2794,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "78",
+          "name": "Generate Engine Files",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789694138605,
+          "durationMillis": 102085,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "98",
+          "name": "Compile Game Editor",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789694240755,
+          "durationMillis": 1126162,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "106",
+          "name": "Compile Engine Tools",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789695366996,
+          "durationMillis": 1057795,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "118",
+          "name": "Push Editors",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789696424847,
+          "durationMillis": 173047,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "133",
+          "name": "Push Editor Counters & Label",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789696598055,
+          "durationMillis": 6893,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "155",
+          "name": "Push Symbols",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789696605016,
+          "durationMillis": 247834,
+          "pauseDurationMillis": 0
+        },
+        {
+          "id": "172",
+          "name": "Declarative: Post Actions",
+          "status": "SUCCESS",
+          "startTimeMillis": 1789696852902,
+          "durationMillis": 46070,
+          "pauseDurationMillis": 0
+        }
+      ],
+      "editorStageMs": 1126162,
+      "toolsStageMs": 1057795,
+      "editorLogUrl": "https://jk3.starbreeze.com/job/payday3/job/trunk/job/GameEditor/886/artifact/BuildLogs/jenkins-payday3-trunk-GameEditor-886/09-compile_editor.log",
+      "consoleEvidence": [
+        "Started by upstream project \"payday3/trunk/FullBuild\" build number 284",
+        " Started by upstream project \"payday3/trunk/XB - Triggers/Nightly\" build number 93",
+        "  Started by timer",
+        "Running on jk-win-004 in D:\\jenkins\\workspace\\payday3\\trunk\\GameEditor",
+        "[2026-09-18T01:04:48.769Z] Executing Task: clean_code -targetId='PAYDAY3Editor' -targetPlatform='Win64' -buildConfiguration='Development'",
+        "[2026-09-18T01:06:10.751Z] Executing Task: pull_changes --changelist='995901' --stream='//payday3/trunk-build-all-code-pull' --clean",
+        "[2026-09-18T01:17:20.831Z] Executing Task: compile_editor -branch='trunk' -needsCleanBuild -useUBA"
+      ],
+      "executorEvidence": [
+        "2026-09-18 03:19:56,902 - INFO - Using Unreal Build Accelerator executor to run 4836 action(s)",
+        "2026-09-18 03:35:52,737 - INFO - Total time in Unreal Build Accelerator executor: 955.82 seconds",
+        "2026-09-18 03:35:57,443 - INFO - Total execution time: 1018.17 seconds",
+        "2026-09-18 03:36:02,949 - INFO - Using Unreal Build Accelerator executor to run 4 action(s)",
+        "2026-09-18 03:36:05,482 - INFO - Total time in Unreal Build Accelerator executor: 2.53 seconds",
+        "2026-09-18 03:36:05,487 - INFO - Total execution time: 4.78 seconds"
+      ]
+    }
+  ]
+}
