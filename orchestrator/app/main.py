@@ -75,6 +75,16 @@ if FastAPI is not None:
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
+    const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
+    const heartbeatAge = value => {
+      const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000));
+      for (const [unit, size] of [['year', 31536000], ['month', 2592000], ['week', 604800],
+                                  ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]]) {
+        if (seconds >= size || unit === 'second') {
+          return relativeTime.format(-Math.floor(seconds / size), unit);
+        }
+      }
+    };
     const agentState = helper => ['offline', 'disabled'].includes(helper.state) ? 'offline'
       : helper.agent_ready ? 'ready'
       : helper.state === 'reserved' ? 'starting'
@@ -90,7 +100,7 @@ if FastAPI is not None:
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
           <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
-          <td>${esc(h.last_seen)}</td>
+          <td title="${esc(h.last_seen)}">${esc(heartbeatAge(h.last_seen))}</td>
           <td><button data-helper-id="${esc(h.helper_id)}" data-enabled="${h.enabled ? 'false' : 'true'}">${h.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')
           : '<tr><td colspan="7">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
