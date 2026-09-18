@@ -51,7 +51,8 @@ if FastAPI is not None:
     table { border-collapse: collapse; min-width: 760px; width: 100%; background: #1f2937; }
     th, td { border-bottom: 1px solid #374151; padding: 10px 12px; text-align: left; white-space: nowrap; }
     th { background: #374151; color: #f9fafb; }
-    .idle, .active { color: #86efac; }
+    .idle { color: #86efac; }
+    .active { color: #4f88d3; }
     .reserved, .pending { color: #fde68a; }
     .offline, .disabled, .expired { color: #fca5a5; }
     .draining { color: #fdba74; }
