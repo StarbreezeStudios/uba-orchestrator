@@ -3,14 +3,94 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from datetime import timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).parents[1] / "orchestrator"))
 
-from app.store import Store
+from app.store import Store, now
 
 
 class StoreTests(unittest.TestCase):
+    def test_stale_lease_is_expired_in_sqlite_without_releasing_replacement(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = Store(str(Path(directory) / "orchestrator.db"))
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 120})
+            request = {"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                       "initiator_port": 1345, "target_core_count": 32}
+            original = store.create_lease(request)
+            store.release_lease(original.lease_id)
+            replacement = store.create_lease({**request, "initiator_id": "jenkins-2"})
+            store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+            # Reproduce a stale active lease persisted by the previous timeout behavior.
+            store._connection.execute("UPDATE leases SET state = 'active' WHERE lease_id = ?",
+                                      (original.lease_id,))
+            store._connection.commit()
+            store.reap()
+            states = dict(store._connection.execute("SELECT lease_id, state FROM leases"))
+            self.assertEqual(states[original.lease_id], "expired")
+            self.assertEqual(states[replacement.lease_id], "active")
+            current = store.list_helpers()[0]
+            self.assertEqual(current["lease_id"], replacement.lease_id)
+            self.assertEqual(current["state"], "active")
+            self.assertTrue(current["agent_ready"])
+            store.close()
+
+    def test_helper_timeout_expires_lease_before_helper_is_reassigned(self):
+        for active in (False, True):
+            for enabled in (False, True):
+                with self.subTest(active=active, enabled=enabled):
+                    store = Store()
+                    helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 120})
+                    request = {"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                               "initiator_port": 1345, "target_core_count": 32}
+                    lease = store.create_lease(request)
+                    if active:
+                        store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+                    store.set_helper_enabled(helper.helper_id, enabled)
+                    with patch("app.store.now", return_value=now() + timedelta(seconds=16)):
+                        store.reap()
+                        self.assertEqual(lease.state, "expired")
+                        self.assertEqual(helper.state, "offline" if enabled else "disabled")
+                        self.assertIsNone(helper.lease_id)
+                        self.assertFalse(helper.agent_ready)
+                        self.assertEqual(store.list_initiators(), [])
+                        expiry = lease.expires_at
+                        self.assertEqual(store.heartbeat_lease(lease.lease_id).state, "expired")
+                        self.assertEqual(lease.expires_at, expiry)
+                        store.heartbeat_helper(helper.helper_id, {"agent_ready": False})
+                        if not enabled:
+                            store.set_helper_enabled(helper.helper_id, True)
+                        replacement = store.create_lease({**request, "initiator_id": "jenkins-2"})
+                        self.assertIsNotNone(replacement)
+                        self.assertEqual(helper.lease_id, replacement.lease_id)
+                        self.assertEqual([i["lease_id"] for i in store.list_initiators()],
+                                         [replacement.lease_id])
+                    store.close()
+
+    def test_lost_helper_expires_entire_lease_and_preserves_other_assignments(self):
+        store = Store()
+        helpers = [store.register_helper({"hostname": f"helper-{i}", "address": f"10.0.0.{i}", "cores": 8})
+                   for i in range(2, 5)]
+        request = {"initiator_id": "jenkins-1", "initiator_address": "10.0.0.1",
+                   "initiator_port": 1345, "target_core_count": 16}
+        lease = store.create_lease(request)
+        for helper in helpers[:2]:
+            store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+        other = store.create_lease({**request, "initiator_id": "jenkins-2", "target_core_count": 8})
+        store.set_helper_enabled(helpers[1].helper_id, False)
+        helpers[0].last_seen -= timedelta(seconds=16)
+        store.reap()
+        self.assertEqual(lease.state, "expired")
+        self.assertEqual(helpers[0].state, "offline")
+        self.assertEqual(helpers[1].state, "disabled")
+        self.assertIsNone(helpers[1].lease_id)
+        self.assertFalse(helpers[1].agent_ready)
+        self.assertEqual(helpers[2].lease_id, other.lease_id)
+        self.assertEqual(other.state, "pending")
+        store.close()
+
     def test_state_survives_store_recreation(self):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "orchestrator.db")

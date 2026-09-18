@@ -198,7 +198,11 @@ class Store:
                 helper.agent_ready = False
                 changed = True
         for lease in self.leases.values():
-            if lease.state not in TERMINAL_LEASE_STATES and timestamp > lease.expires_at:
+            if lease.state in TERMINAL_LEASE_STATES:
+                continue
+            assignment_lost = any(self.helpers[helper_id].lease_id != lease.lease_id
+                                  for helper_id in lease.helper_ids)
+            if timestamp > lease.expires_at or assignment_lost:
                 lease.state = "expired"
                 changed = True
                 for helper in self.helpers.values():
