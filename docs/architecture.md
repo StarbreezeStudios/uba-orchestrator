@@ -60,6 +60,7 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 ## Timeouts and errors
 
 * Helper liveness expires after 15 seconds without a heartbeat.
+* A pending or active lease also expires when any assigned helper loses its reservation, including after a helper heartbeat timeout. The remaining reservations for that lease are released; offline helpers stay offline and disabled helpers stay disabled. Initiator heartbeats cannot renew an expired lease.
 * A lease expires 30 seconds after creation or its last heartbeat.
 * Helper heartbeats report readiness but do not renew leases. Only the initiator can renew its lease, so an aborted build releases its helpers automatically.
 * Native HTTP requests have a finite WinHTTP operation timeout inherited from the process configuration and always fail closed; no bridge call waits indefinitely.

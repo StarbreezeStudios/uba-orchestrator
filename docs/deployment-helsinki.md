@@ -29,6 +29,8 @@ Expected health response:
 
 The operations dashboard is available at `http://helsinki:8080/ui`. It displays helper registration/state and active initiator leases. The underlying diagnostic endpoints are `/api/v1/helpers` and `/api/v1/initiators`.
 
+`JENKINS_BASE_URL` configures dashboard links from helper and initiator names to Jenkins node pages. Compose defaults it to `https://jk3.starbreeze.com`; override it through the deployment environment or Compose `.env` file. Node names are lowercased and URL-encoded in `/computer/<node>/` paths while their displayed text is preserved. Without this variable, standalone deployments display names without links.
+
 To follow logs:
 
 ```bash
