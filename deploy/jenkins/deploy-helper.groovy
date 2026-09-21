@@ -24,6 +24,27 @@ pipeline {
             }
         }
 
+        stage('Stop existing helper') {
+            steps {
+                powershell '''
+                    $ErrorActionPreference = 'Stop'
+                    $task = Get-ScheduledTask -TaskName 'UbaOrchestratorHelper' -ErrorAction SilentlyContinue
+                    if ($task) {
+                        Stop-ScheduledTask -InputObject $task
+                    }
+
+                    $helpers = Get-CimInstance Win32_Process | Where-Object {
+                        $_.Name -in @('python.exe', 'pythonw.exe') -and
+                        $_.CommandLine -like '*UbaOrchestrator\\helper-agent\\agent.py*'
+                    }
+                    $helpers | Select-Object ProcessId, ExecutablePath, CommandLine
+                    $helpers | ForEach-Object {
+                        Stop-Process -Id $_.ProcessId -Force
+                    }
+                '''
+            }
+        }
+
         stage('Install helper') {
             steps {
                 python 'deploy/jenkins/deploy-helper.py'

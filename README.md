@@ -32,6 +32,8 @@ The native bridge is compiled later from the UE 5.6/UBA Perforce integration wor
 
 See [docs/mvp-runbook.md](docs/mvp-runbook.md) for the two-machine startup sequence.
 
+For developer workstation trials, see [Build with UBA from Visual Studio instead of XGE](docs/visual-studio-uba-guide.md).
+
 When the service is running, open `/ui` for the local operations dashboard. It shows registered helpers and active initiator leases; the tables refresh every three seconds.
 
 SQLite persistence and restart reconciliation are now implemented. A service restart retains helper and lease records; stale helpers and expired leases are reconciled on startup. The service still assumes a single orchestrator instance.

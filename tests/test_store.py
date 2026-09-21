@@ -107,6 +107,33 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "expired")
             restarted.close()
 
+    def test_existing_enabled_column_is_preserved_on_restart_and_save(self):
+        with tempfile.TemporaryDirectory() as directory:
+            database = str(Path(directory) / "orchestrator.db")
+            store = Store(database)
+            helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+            store._connection.execute("ALTER TABLE helpers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
+            store._connection.execute("UPDATE helpers SET enabled = 0 WHERE helper_id = ?", (helper.helper_id,))
+            store._connection.commit()
+            store.close()
+
+            restarted = Store(database)
+            self.addCleanup(restarted.close)
+            restarted.heartbeat_helper(helper.helper_id, {"agent_port": 1346})
+            row = restarted._connection.execute("SELECT enabled, listen_port FROM helpers WHERE helper_id = ?",
+                                                 (helper.helper_id,)).fetchone()
+            self.assertEqual(tuple(row), (0, 1346))
+            new = restarted.register_helper({"hostname": "helper-2", "address": "10.0.0.3", "cores": 16})
+            row = restarted._connection.execute("SELECT enabled FROM helpers WHERE helper_id = ?",
+                                                 (new.helper_id,)).fetchone()
+            self.assertEqual(row["enabled"], 1)
+            restarted.close()
+            reopened = Store(database)
+            self.addCleanup(reopened.close)
+            self.assertEqual(set(reopened.helpers), {helper.helper_id, new.helper_id})
+            self.assertEqual(reopened._connection.execute(
+                "SELECT enabled FROM helpers WHERE helper_id = ?", (helper.helper_id,)).fetchone()["enabled"], 0)
+
     def test_stale_state_is_reconciled_when_store_restarts(self):
         with tempfile.TemporaryDirectory() as directory:
             database = str(Path(directory) / "orchestrator.db")
