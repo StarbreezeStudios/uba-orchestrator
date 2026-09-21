@@ -22,7 +22,7 @@ UBA_AGENT_DIRECTORY = INSTALL_ROOT / "bin"
 UBA_AGENT = UBA_AGENT_DIRECTORY / "UbaAgent.exe"
 LOG_DIRECTORY = INSTALL_ROOT / "logs" / "helper"
 TASK_NAME = "UbaOrchestratorHelper"
-ORCHESTRATOR_URL = "http://helsinki:8080"
+ORCHESTRATOR_URL = "http://uba-orchestrator.starbreeze.com/:8080"
 LISTEN_PORT = 1346
 UBA_AGENT_SOURCE = Path(r"\\devopsfs.starbreeze.com\DevOps\Software-Installs\UbaAgent\UbaAgent.exe")
 
