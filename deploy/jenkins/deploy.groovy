@@ -2,7 +2,11 @@ pipeline {
     agent { label "${params.node_name}" }
 
     parameters {
-        string(name: 'node_name', defaultValue: '', description: 'Target node name')
+        choice(
+            name: 'node_name',
+            choices: ['uba-orchestrator-dev', 'uba-orchestrator'],
+            description: 'Target node name'
+        )
     }
 
     options {
