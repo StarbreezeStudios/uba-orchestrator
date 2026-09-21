@@ -153,10 +153,21 @@ class Store:
             return
         self._connection.execute("DELETE FROM lease_helpers")
         self._connection.execute("DELETE FROM leases")
-        self._connection.execute("DELETE FROM helpers")
+        stored_ids = {row["helper_id"] for row in self._connection.execute("SELECT helper_id FROM helpers")}
+        self._connection.executemany("DELETE FROM helpers WHERE helper_id = ?",
+                                     [(helper_id,) for helper_id in stored_ids - self.helpers.keys()])
         for helper in self.helpers.values():
             self._connection.execute(
-                "INSERT INTO helpers VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                """INSERT INTO helpers
+                   (helper_id, hostname, address, cores, memory_bytes, platform, uba_version,
+                    listen_port, state, last_seen, lease_id, agent_ready)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(helper_id) DO UPDATE SET
+                    hostname=excluded.hostname, address=excluded.address, cores=excluded.cores,
+                    memory_bytes=excluded.memory_bytes, platform=excluded.platform,
+                    uba_version=excluded.uba_version, listen_port=excluded.listen_port,
+                    state=excluded.state, last_seen=excluded.last_seen,
+                    lease_id=excluded.lease_id, agent_ready=excluded.agent_ready""",
                 (helper.helper_id, helper.hostname, helper.address, helper.cores, helper.memory_bytes,
                  helper.platform, helper.uba_version, helper.listen_port, helper.state,
                  helper.last_seen.isoformat(), helper.lease_id, int(helper.agent_ready)),
