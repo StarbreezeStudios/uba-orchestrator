@@ -49,12 +49,12 @@ class EventTests(unittest.TestCase):
         self.assertEqual([json.loads(line) for line in self.output.getvalue().splitlines()], list(reversed(events)))
 
     def test_retention_order_limits_and_snapshot_isolation(self):
-        helper = self.helper()
         for index in range(205):
-            self.store.set_helper_enabled(helper.helper_id, index % 2 == 1)
+            self.store.register_helper({"helper_id": str(index), "hostname": "jk-win-039",
+                                        "address": "10.0.0.1", "cores": 120})
         events = self.store.list_events()
         self.assertEqual(len(events), 200)
-        self.assertEqual(events[0]["event"], "helper_disabled")
+        self.assertEqual(events[0]["event"], "helper_registered")
         self.assertEqual(self.store.list_events(1), events[:1])
         events[0]["helpers"].clear()
         self.assertEqual(self.store.list_events(1)[0]["helpers"], ["jk-win-039"])
@@ -69,7 +69,7 @@ class EventTests(unittest.TestCase):
         self.lease()
         helper.last_seen -= timedelta(seconds=16)
         self.store.reap()
-        self.assertEqual(self.store.list_events(1)[0]["reason"], "helper_lost")
+        self.assertEqual(self.store.list_events(1)[0]["event"], "helper_offline")
         self.store.heartbeat_helper(helper.helper_id, {"agent_ready": False})
         self.assertEqual(self.store.list_events(1)[0]["event"], "helper_recovered")
         lease = self.lease()

@@ -89,8 +89,8 @@ if FastAPI is not None:
       : 'idle';
     const eventDescription = event => {
       const parts = [esc(event.message)];
-      if (event.initiator_id) parts.push(`Initiator: ${nodeLink(event.initiator_id)}`);
-      if (event.helpers?.length) parts.push(`Helpers: ${event.helpers.map(nodeLink).join(', ')}`);
+      if (event.initiator_id) parts.push(`Initiator: ${esc(event.initiator_id)}`);
+      if (event.helpers?.length) parts.push(`Helpers: ${event.helpers.map(esc).join(', ')}`);
       for (const [key, label] of [['requested_cores', 'Requested cores'], ['assigned_cores', 'Assigned cores'],
                                  ['available_cores', 'Available cores'], ['cores', 'Cores'], ['reason', 'Reason']]) {
         if (event[key] !== undefined) parts.push(`${label}: ${esc(event[key])}`);
@@ -113,18 +113,9 @@ if FastAPI is not None:
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
           <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
-<<<<<<< Updated upstream
           <td>${i.helpers.map(h => `${esc(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
           <td><code>${esc(i.lease_id)}</code></td><td>${esc(i.expires_at)}</td></tr>`).join('')
           : '<tr><td colspan="7">No active initiators</td></tr>';
-||||||| Stash base
-          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
-          <td>${esc(i.expires_at)}</td></tr>`).join('')
-          : '<tr><td colspan="6">No active initiators</td></tr>';
-=======
-          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
-          <td>${esc(i.expires_at)}</td></tr>`).join('')
-          : '<tr><td colspan="6">No active initiators</td></tr>';
         try {
           const eventsResponse = await fetch('/api/v1/events?limit=200');
           if (!eventsResponse.ok) throw new Error(`HTTP ${eventsResponse.status}`);
@@ -136,7 +127,6 @@ if FastAPI is not None:
         } catch (error) {
           document.querySelector('#events').innerHTML = `<tr><td colspan="4">Unable to load events: ${esc(error)}</td></tr>`;
         }
->>>>>>> Stashed changes
         document.querySelector('#updated').textContent = new Date().toLocaleString();
       } catch (error) {
         document.querySelector('#updated').textContent = `error: ${error}`;
