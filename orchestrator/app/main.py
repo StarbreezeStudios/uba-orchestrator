@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from html import escape
 
 from .store import Store
 
@@ -51,29 +52,49 @@ if FastAPI is not None:
     table { border-collapse: collapse; min-width: 760px; width: 100%; background: #1f2937; }
     th, td { border-bottom: 1px solid #374151; padding: 10px 12px; text-align: left; white-space: nowrap; }
     th { background: #374151; color: #f9fafb; }
-    .idle, .active { color: #86efac; }
+    .idle { color: #86efac; }
+    .active { color: #4f88d3; }
     .reserved, .pending { color: #fde68a; }
-    .offline, .expired { color: #fca5a5; }
+    .offline, .disabled, .expired { color: #fca5a5; }
+    .draining { color: #fdba74; }
+    button { background: #374151; border: 1px solid #6b7280; border-radius: 4px; color: #f9fafb; cursor: pointer; padding: 5px 8px; }
     code { color: #bfdbfe; }
+    a { color: #bfdbfe; }
   </style>
 </head>
-<body>
+<body data-jenkins-base-url="__JENKINS_BASE_URL__">
   <h1>UBA Orchestrator</h1>
   <div class="meta">Refreshing every 3 seconds · Last update: <span id="updated">never</span></div>
   <h2>Helpers</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Lease</th><th>Last heartbeat</th></tr></thead>
+    <thead><tr><th>Hostname</th><th>Address</th><th>Cores</th><th>State</th><th>Agent</th><th>Last heartbeat</th><th>Action</th></tr></thead>
     <tbody id="helpers"><tr><td colspan="7">Loading...</td></tr></tbody>
   </table></div>
   <h2>Initiators</h2>
   <div class="table-wrap"><table>
-    <thead><tr><th>Initiator</th><th>Address</th><th>Requested cores</th><th>State</th><th>Helpers</th><th>Lease</th><th>Expires</th></tr></thead>
-    <tbody id="initiators"><tr><td colspan="7">Loading...</td></tr></tbody>
+    <thead><tr><th>Initiator</th><th>Address</th><th>Requested cores</th><th>State</th><th>Helpers</th><th>Expires</th></tr></thead>
+    <tbody id="initiators"><tr><td colspan="6">Loading...</td></tr></tbody>
   </table></div>
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
-    const agentState = helper => helper.state === 'offline' ? 'offline'
+    const jenkinsBaseUrl = document.body.dataset.jenkinsBaseUrl;
+    const nodeLink = name => {
+      if (!jenkinsBaseUrl) return esc(name);
+      const url = `${jenkinsBaseUrl}/computer/${encodeURIComponent(String(name).toLowerCase())}/`;
+      return `<a href="${esc(url)}">${esc(name)}</a>`;
+    };
+    const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
+    const heartbeatAge = value => {
+      const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000));
+      for (const [unit, size] of [['year', 31536000], ['month', 2592000], ['week', 604800],
+                                  ['day', 86400], ['hour', 3600], ['minute', 60], ['second', 1]]) {
+        if (seconds >= size || unit === 'second') {
+          return relativeTime.format(-Math.floor(seconds / size), unit);
+        }
+      }
+    };
+    const agentState = helper => ['offline', 'disabled'].includes(helper.state) ? 'offline'
       : helper.agent_ready ? 'ready'
       : helper.state === 'reserved' ? 'starting'
       : 'idle';
@@ -86,27 +107,44 @@ if FastAPI is not None:
         const initiators = await initiatorsResponse.json();
         helpers.sort((left, right) => String(left.hostname ?? '').localeCompare(String(right.hostname ?? ''), undefined, { sensitivity: 'base' }));
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
-          <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
+          <tr><td>${nodeLink(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
-          <td><code>${esc(h.lease_id || '-')}</code></td><td>${esc(h.last_seen)}</td></tr>`).join('')
+          <td title="${esc(h.last_seen)}">${esc(heartbeatAge(h.last_seen))}</td>
+          <td><button data-helper-id="${esc(h.helper_id)}" data-enabled="${h.enabled ? 'false' : 'true'}">${h.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')
           : '<tr><td colspan="7">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
-          <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
+          <tr><td>${nodeLink(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
-          <td>${i.helpers.map(h => `${esc(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
-          <td><code>${esc(i.lease_id)}</code></td><td>${esc(i.expires_at)}</td></tr>`).join('')
-          : '<tr><td colspan="7">No active initiators</td></tr>';
+          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
+          <td>${esc(i.expires_at)}</td></tr>`).join('')
+          : '<tr><td colspan="6">No active initiators</td></tr>';
         document.querySelector('#updated').textContent = new Date().toLocaleString();
       } catch (error) {
         document.querySelector('#updated').textContent = `error: ${error}`;
       }
     };
+    document.querySelector('#helpers').addEventListener('click', async event => {
+      const button = event.target.closest('button[data-helper-id]');
+      if (!button) return;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/v1/helpers/${encodeURIComponent(button.dataset.helperId)}/enabled`, {
+          method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({enabled: button.dataset.enabled === 'true'})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        await refresh();
+      } catch (error) {
+        document.querySelector('#updated').textContent = `error: ${error}`;
+        button.disabled = false;
+      }
+    });
     refresh();
     setInterval(refresh, 3000);
   </script>
 </body>
 </html>
-"""
+""".replace("__JENKINS_BASE_URL__", escape(os.environ.get("JENKINS_BASE_URL", "").rstrip("/"), quote=True))
 
     @app.post("/api/v1/helpers/register")
     def register_helper(payload: dict) -> dict:
@@ -119,6 +157,16 @@ if FastAPI is not None:
             result = store.helper_view(helper)
             result["lease_id"] = helper.lease_id
             return result
+        except KeyError as error:
+            raise HTTPException(404, "Unknown helper") from error
+
+    @app.post("/api/v1/helpers/{helper_id}/enabled")
+    def set_helper_enabled(helper_id: str, payload: dict) -> dict:
+        enabled = payload.get("enabled")
+        if not isinstance(enabled, bool):
+            raise HTTPException(400, "enabled must be a boolean")
+        try:
+            return store.helper_view(store.set_helper_enabled(helper_id, enabled))
         except KeyError as error:
             raise HTTPException(404, "Unknown helper") from error
 
