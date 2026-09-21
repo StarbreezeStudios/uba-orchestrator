@@ -1,5 +1,9 @@
 pipeline {
-    agent { label 'uba-orchestrator' }
+    agent { label "${params.node_name}" }
+
+    parameters {
+        string(name: 'node_name', defaultValue: '', description: 'Target node name')
+    }
 
     options {
         timestamps()
