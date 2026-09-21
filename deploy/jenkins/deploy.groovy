@@ -1,5 +1,5 @@
 pipeline {
-    agent { label 'helsinki' }
+    agent { label 'uba-orchestrator' }
 
     options {
         timestamps()
