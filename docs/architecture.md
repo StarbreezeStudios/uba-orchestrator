@@ -45,6 +45,15 @@ The MVP endpoints are:
 * `GET /api/v1/leases/{lease_id}`: state and selected helper endpoints.
 * `DELETE /api/v1/leases/{lease_id}`: release reservation.
 * `GET /api/v1/health`: liveness.
+* `GET /api/v1/events?limit=200`: recent committed coordinator events, newest first. `limit` defaults to 200 and must be an integer from 1 to 200; invalid values return HTTP 422.
+
+## Recent events
+
+The coordinator retains up to 200 events in a process-local memory buffer and emits each event as a JSON line to stdout after the operation commits. Failed transactions do not publish their pending events. The buffer is cleared on restart; startup reconciliation may immediately add new lease-expiration events. Docker log retention determines how long stdout history remains available.
+
+Each event contains `timestamp` (UTC ISO 8601), `level`, `event`, and `message`. Context fields include `initiator_id`, `helpers` (hostnames), `helper_id`, `lease_id`, `requested_cores`, `assigned_cores`, `available_cores`, `address`, `cores`, and `reason` where applicable. Expiration reasons are `helper_lost`, `initiator_timeout`, and `coordinator_restart`.
+
+Events cover capacity requests and rejections, lease creation/activation/release/expiration, helper registration/recovery/heartbeat timeout, and enable/disable changes. Routine heartbeats are not logged. Repeated capacity requests are separate events and can fill the bounded history during prolonged capacity shortages. The dashboard refreshes the latest 200 events every three seconds and links node names to Jenkins. This history is diagnostic, not a durable audit trail, and assumes the existing single-process deployment.
 
 Lease states are `pending`, `active`, `released`, and `expired`. Helper states are `idle`, `reserved`, `active`, and `offline`. The initiator state is represented by the lease: pending until a helper reports readiness, active while heartbeats continue, and released/expired after completion or timeout.
 

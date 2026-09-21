@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 import sqlite3
+import json
+from collections import deque
+from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from threading import RLock
@@ -61,6 +64,8 @@ class Store:
         self.db_path = db_path
         self.helpers: dict[str, Helper] = {}
         self.leases: dict[str, Lease] = {}
+        self.events: deque[dict] = deque(maxlen=200)
+        self._pending_events: list[dict] = []
         if self.db_path:
             self._connection = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
             self._connection.row_factory = sqlite3.Row
@@ -70,6 +75,7 @@ class Store:
             self._reap_locked()
             self._save()
             self._connection.commit()
+            self._publish_events()
         else:
             self._connection = None
 
@@ -173,11 +179,34 @@ class Store:
         if self._connection is not None:
             self._save()
             self._connection.commit()
+        self._publish_events()
 
     def _rollback(self) -> None:
+        self._pending_events.clear()
         if self._connection is not None:
             self._connection.rollback()
             self._load()
+
+    def _event(self, event: str, message: str, level: str = "INFO", **details) -> None:
+        self._pending_events.append({"timestamp": now().isoformat(), "level": level,
+                                     "event": event, "message": message, **details})
+
+    def _lease_event(self, event: str, lease: Lease, message: str, **details) -> None:
+        self._event(event, message, lease_id=lease.lease_id, initiator_id=lease.initiator_id,
+                    helpers=[self.helpers[i].hostname for i in lease.helper_ids],
+                    requested_cores=lease.target_core_count, **details)
+
+    def _publish_events(self) -> None:
+        for event in self._pending_events:
+            self.events.append(event)
+            print(json.dumps(event), flush=True)
+        self._pending_events.clear()
+
+    def list_events(self, limit: int = 200) -> list[dict]:
+        if not 1 <= limit <= 200:
+            raise ValueError("Event limit must be between 1 and 200")
+        with self.lock:
+            return deepcopy(list(reversed(self.events))[:limit])
 
     def _reap_locked(self) -> bool:
         timestamp = now()
@@ -187,10 +216,14 @@ class Store:
                 helper.state = "offline"
                 helper.lease_id = None
                 helper.agent_ready = False
+                self._event("helper_offline", "Helper heartbeat timed out", level="WARNING",
+                            helpers=[helper.hostname], helper_id=helper.helper_id)
                 changed = True
         for lease in self.leases.values():
             if lease.state not in TERMINAL_LEASE_STATES and timestamp > lease.expires_at:
                 lease.state = "expired"
+                self._lease_event("lease_expired", lease, "Lease expired", level="WARNING",
+                                  reason="helper_lost" if assignment_lost else "initiator_timeout")
                 changed = True
                 for helper in self.helpers.values():
                     if helper.lease_id == lease.lease_id:
@@ -205,6 +238,8 @@ class Store:
             if lease.state in TERMINAL_LEASE_STATES:
                 continue
             lease.state = "expired"
+            self._lease_event("lease_expired", lease, "Lease expired after coordinator restart",
+                              level="WARNING", reason="coordinator_restart")
             for helper in self.helpers.values():
                 if helper.lease_id == lease.lease_id:
                     helper.lease_id = None
@@ -249,6 +284,8 @@ class Store:
                                     platform=data.get("platform", "windows"), uba_version=data.get("uba_version", "unknown"),
                                     listen_port=data.get("listen_port", 1345))
                     self.helpers[helper_id] = helper
+                    self._event("helper_registered", "Helper registered", helpers=[helper.hostname],
+                                helper_id=helper_id, address=helper.address, cores=helper.cores)
                 else:
                     for key in ("hostname", "address", "cores", "memory_bytes", "platform", "uba_version", "listen_port"):
                         if key in data:
@@ -256,6 +293,8 @@ class Store:
                     helper.last_seen = now()
                     if helper.state == "offline":
                         helper.state = "idle"
+                        self._event("helper_recovered", "Helper reconnected", helpers=[helper.hostname],
+                                    helper_id=helper_id)
                 self._commit()
                 return helper
             except Exception:
@@ -270,13 +309,28 @@ class Store:
                 helper.last_seen = now()
                 if helper.state == "offline":
                     helper.state = "idle"
+                    self._event("helper_recovered", "Helper reconnected", helpers=[helper.hostname],
+                                helper_id=helper_id)
                 if data.get("agent_ready") is not None:
                     helper.agent_ready = bool(data["agent_ready"])
                 if data.get("agent_port"):
                     helper.listen_port = int(data["agent_port"])
                 if helper.lease_id and helper.agent_ready:
+<<<<<<< Updated upstream
                     helper.state = "active"
                     self.leases[helper.lease_id].state = "active"
+||||||| Stash base
+                    if helper.enabled:
+                        helper.state = "active"
+                    self.leases[helper.lease_id].state = "active"
+=======
+                    if helper.enabled:
+                        helper.state = "active"
+                    lease = self.leases[helper.lease_id]
+                    if lease.state != "active":
+                        self._lease_event("lease_active", lease, "Lease activated")
+                    lease.state = "active"
+>>>>>>> Stashed changes
                 self._commit()
                 return helper
             except Exception:
@@ -304,7 +358,15 @@ class Store:
             try:
                 self._reap_locked()
                 required = int(data["target_core_count"])
+<<<<<<< Updated upstream
                 candidates = [h for h in self.helpers.values() if h.state == "idle" and h.cores > 0]
+||||||| Stash base
+                candidates = [h for h in self.helpers.values() if h.enabled and h.state == "idle" and h.cores > 0]
+=======
+                self._event("capacity_requested", "Capacity requested", initiator_id=data["initiator_id"],
+                            requested_cores=required)
+                candidates = [h for h in self.helpers.values() if h.enabled and h.state == "idle" and h.cores > 0]
+>>>>>>> Stashed changes
                 candidates.sort(key=lambda h: h.cores, reverse=True)
                 selected: list[Helper] = []
                 capacity = 0
@@ -314,6 +376,9 @@ class Store:
                     if capacity >= required:
                         break
                 if capacity < required:
+                    self._event("capacity_unavailable", "Insufficient idle helper capacity", level="WARNING",
+                                initiator_id=data["initiator_id"], requested_cores=required,
+                                available_cores=capacity)
                     self._commit()
                     return None
                 lease = Lease(str(uuid4()), data["initiator_id"], data["initiator_address"],
@@ -323,6 +388,7 @@ class Store:
                     helper.state = "reserved"
                     helper.lease_id = lease.lease_id
                     helper.agent_ready = False
+                self._lease_event("lease_created", lease, "Helpers assigned", assigned_cores=capacity)
                 self._commit()
                 return lease
             except Exception:
@@ -334,6 +400,8 @@ class Store:
             self._begin()
             try:
                 lease = self.leases[lease_id]
+                if lease.state not in TERMINAL_LEASE_STATES:
+                    self._lease_event("lease_released", lease, "Lease explicitly released", reason="explicit_release")
                 lease.state = "released"
                 for helper in self.helpers.values():
                     if helper.lease_id == lease_id:
@@ -346,6 +414,52 @@ class Store:
                 self._rollback()
                 raise
 
+<<<<<<< Updated upstream
+||||||| Stash base
+    def set_helper_enabled(self, helper_id: str, enabled: bool) -> Helper:
+        with self.lock:
+            self._begin()
+            try:
+                helper = self.helpers[helper_id]
+                helper.enabled = enabled
+                if enabled:
+                    helper.state = "idle" if now() - helper.last_seen <= HELPER_OFFLINE_AFTER else "offline"
+                elif helper.lease_id:
+                    helper.state = "draining"
+                else:
+                    helper.state = "disabled"
+                    helper.agent_ready = False
+                self._commit()
+                return helper
+            except Exception:
+                self._rollback()
+                raise
+
+=======
+    def set_helper_enabled(self, helper_id: str, enabled: bool) -> Helper:
+        with self.lock:
+            self._begin()
+            try:
+                helper = self.helpers[helper_id]
+                if helper.enabled != enabled:
+                    self._event("helper_enabled" if enabled else "helper_disabled",
+                                "Helper enabled" if enabled else "Helper disabled",
+                                helpers=[helper.hostname], helper_id=helper_id)
+                helper.enabled = enabled
+                if enabled:
+                    helper.state = "idle" if now() - helper.last_seen <= HELPER_OFFLINE_AFTER else "offline"
+                elif helper.lease_id:
+                    helper.state = "draining"
+                else:
+                    helper.state = "disabled"
+                    helper.agent_ready = False
+                self._commit()
+                return helper
+            except Exception:
+                self._rollback()
+                raise
+
+>>>>>>> Stashed changes
     def lease_view(self, lease_id: str) -> dict:
         with self.lock:
             self._begin()

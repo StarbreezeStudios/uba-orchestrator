@@ -5,7 +5,7 @@ import os
 from .store import Store
 
 try:
-    from fastapi import FastAPI, HTTPException
+    from fastapi import FastAPI, HTTPException, Query
     from fastapi.responses import HTMLResponse, RedirectResponse
 except ImportError:  # The pure store remains testable without optional server dependencies.
     FastAPI = None
@@ -31,6 +31,10 @@ if FastAPI is not None:
     @app.get("/api/v1/initiators")
     def list_initiators() -> list[dict]:
         return store.list_initiators()
+
+    @app.get("/api/v1/events")
+    def list_events(limit: int = Query(default=200, ge=1, le=200)) -> list[dict]:
+        return store.list_events(limit)
 
     @app.get("/ui", response_class=HTMLResponse, include_in_schema=False)
     def ui() -> str:
@@ -70,6 +74,12 @@ if FastAPI is not None:
     <thead><tr><th>Initiator</th><th>Address</th><th>Requested cores</th><th>State</th><th>Helpers</th><th>Lease</th><th>Expires</th></tr></thead>
     <tbody id="initiators"><tr><td colspan="7">Loading...</td></tr></tbody>
   </table></div>
+  <h2>Recent events</h2>
+  <div class="meta">Last 200 events · Newest first · Cleared on coordinator restart</div>
+  <div class="table-wrap" style="max-height: 480px"><table>
+    <thead><tr><th>Time (UTC)</th><th>Level</th><th>Event</th><th>Description</th></tr></thead>
+    <tbody id="events"><tr><td colspan="4">Loading...</td></tr></tbody>
+  </table></div>
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
@@ -77,6 +87,16 @@ if FastAPI is not None:
       : helper.agent_ready ? 'ready'
       : helper.state === 'reserved' ? 'starting'
       : 'idle';
+    const eventDescription = event => {
+      const parts = [esc(event.message)];
+      if (event.initiator_id) parts.push(`Initiator: ${nodeLink(event.initiator_id)}`);
+      if (event.helpers?.length) parts.push(`Helpers: ${event.helpers.map(nodeLink).join(', ')}`);
+      for (const [key, label] of [['requested_cores', 'Requested cores'], ['assigned_cores', 'Assigned cores'],
+                                 ['available_cores', 'Available cores'], ['cores', 'Cores'], ['reason', 'Reason']]) {
+        if (event[key] !== undefined) parts.push(`${label}: ${esc(event[key])}`);
+      }
+      return parts.join(' · ');
+    };
     const refresh = async () => {
       try {
         const [helpersResponse, initiatorsResponse] = await Promise.all([
@@ -93,9 +113,30 @@ if FastAPI is not None:
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
           <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
+<<<<<<< Updated upstream
           <td>${i.helpers.map(h => `${esc(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
           <td><code>${esc(i.lease_id)}</code></td><td>${esc(i.expires_at)}</td></tr>`).join('')
           : '<tr><td colspan="7">No active initiators</td></tr>';
+||||||| Stash base
+          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
+          <td>${esc(i.expires_at)}</td></tr>`).join('')
+          : '<tr><td colspan="6">No active initiators</td></tr>';
+=======
+          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
+          <td>${esc(i.expires_at)}</td></tr>`).join('')
+          : '<tr><td colspan="6">No active initiators</td></tr>';
+        try {
+          const eventsResponse = await fetch('/api/v1/events?limit=200');
+          if (!eventsResponse.ok) throw new Error(`HTTP ${eventsResponse.status}`);
+          const events = await eventsResponse.json();
+          document.querySelector('#events').innerHTML = events.length ? events.map(event => `
+            <tr><td>${esc(new Date(event.timestamp).toISOString())}</td><td>${esc(event.level)}</td>
+            <td>${esc(event.event)}</td><td style="white-space: normal">${eventDescription(event)}</td></tr>`).join('')
+            : '<tr><td colspan="4">No recent events</td></tr>';
+        } catch (error) {
+          document.querySelector('#events').innerHTML = `<tr><td colspan="4">Unable to load events: ${esc(error)}</td></tr>`;
+        }
+>>>>>>> Stashed changes
         document.querySelector('#updated').textContent = new Date().toLocaleString();
       } catch (error) {
         document.querySelector('#updated').textContent = `error: ${error}`;
