@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from html import escape
 
 from .store import Store
 
@@ -58,9 +59,10 @@ if FastAPI is not None:
     .draining { color: #fdba74; }
     button { background: #374151; border: 1px solid #6b7280; border-radius: 4px; color: #f9fafb; cursor: pointer; padding: 5px 8px; }
     code { color: #bfdbfe; }
+    a { color: #bfdbfe; }
   </style>
 </head>
-<body>
+<body data-jenkins-base-url="__JENKINS_BASE_URL__">
   <h1>UBA Orchestrator</h1>
   <div class="meta">Refreshing every 3 seconds · Last update: <span id="updated">never</span></div>
   <h2>Helpers</h2>
@@ -76,6 +78,12 @@ if FastAPI is not None:
   <script>
     const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const state = value => `<span class="${esc(value)}">${esc(value)}</span>`;
+    const jenkinsBaseUrl = document.body.dataset.jenkinsBaseUrl;
+    const nodeLink = name => {
+      if (!jenkinsBaseUrl) return esc(name);
+      const url = `${jenkinsBaseUrl}/computer/${encodeURIComponent(String(name).toLowerCase())}/`;
+      return `<a href="${esc(url)}">${esc(name)}</a>`;
+    };
     const relativeTime = new Intl.RelativeTimeFormat('en', { numeric: 'always' });
     const heartbeatAge = value => {
       const seconds = Math.max(0, Math.floor((Date.now() - Date.parse(value)) / 1000));
@@ -99,15 +107,15 @@ if FastAPI is not None:
         const initiators = await initiatorsResponse.json();
         helpers.sort((left, right) => String(left.hostname ?? '').localeCompare(String(right.hostname ?? ''), undefined, { sensitivity: 'base' }));
         document.querySelector('#helpers').innerHTML = helpers.length ? helpers.map(h => `
-          <tr><td>${esc(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
+          <tr><td>${nodeLink(h.hostname)}</td><td><code>${esc(h.address)}:${esc(h.listen_port)}</code></td>
           <td>${esc(h.cores)}</td><td>${state(h.state)}</td><td>${agentState(h)}</td>
           <td title="${esc(h.last_seen)}">${esc(heartbeatAge(h.last_seen))}</td>
           <td><button data-helper-id="${esc(h.helper_id)}" data-enabled="${h.enabled ? 'false' : 'true'}">${h.enabled ? 'Disable' : 'Enable'}</button></td></tr>`).join('')
           : '<tr><td colspan="7">No helpers registered</td></tr>';
         document.querySelector('#initiators').innerHTML = initiators.length ? initiators.map(i => `
-          <tr><td>${esc(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
+          <tr><td>${nodeLink(i.initiator_id)}</td><td><code>${esc(i.address)}:${esc(i.port)}</code></td>
           <td>${esc(i.target_core_count)}</td><td>${state(i.state)}</td>
-          <td>${i.helpers.map(h => `${esc(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
+          <td>${i.helpers.map(h => `${nodeLink(h.hostname)} (${esc(h.cores)})`).join(', ')}</td>
           <td>${esc(i.expires_at)}</td></tr>`).join('')
           : '<tr><td colspan="6">No active initiators</td></tr>';
         document.querySelector('#updated').textContent = new Date().toLocaleString();
@@ -136,7 +144,7 @@ if FastAPI is not None:
   </script>
 </body>
 </html>
-"""
+""".replace("__JENKINS_BASE_URL__", escape(os.environ.get("JENKINS_BASE_URL", "").rstrip("/"), quote=True))
 
     @app.post("/api/v1/helpers/register")
     def register_helper(payload: dict) -> dict:
