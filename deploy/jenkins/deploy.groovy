@@ -1,5 +1,13 @@
 pipeline {
-    agent { label 'helsinki' }
+    agent { label "${params.node_name}" }
+
+    parameters {
+        choice(
+            name: 'node_name',
+            choices: ['uba-orchestrator-dev', 'uba-orchestrator'],
+            description: 'Target node name'
+        )
+    }
 
     options {
         timestamps()
