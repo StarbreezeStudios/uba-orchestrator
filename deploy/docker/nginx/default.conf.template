@@ -1,0 +1,22 @@
+server {
+    listen 80;
+    server_name ${PUBLIC_DOMAIN};
+    return 308 https://${PUBLIC_DOMAIN}$request_uri;
+}
+
+server {
+    listen 443 ssl;
+    server_name ${PUBLIC_DOMAIN};
+
+    ssl_certificate /etc/nginx/tls/starbreeze.com.pem;
+    ssl_certificate_key /etc/nginx/tls/starbreeze.com.key;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    location / {
+        proxy_pass http://uba-orchestrator:8080;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}

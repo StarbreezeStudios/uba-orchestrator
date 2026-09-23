@@ -13,7 +13,7 @@ python -m uvicorn app.main:app --app-dir orchestrator --host 0.0.0.0 --port 8080
 
 The service must be reachable from the helper and initiator on TCP 8080.
 
-For a local non-Docker run, set `UBA_ORCHESTRATOR_DB` to an explicit writable path if the default `orchestrator.db` is not suitable. For Docker, start the service with `docker compose -f deploy/docker/compose.yaml up -d --build`; the named `orchestrator-data` volume is required for restart persistence.
+For a local non-Docker run, set `UBA_ORCHESTRATOR_DB` to an explicit writable path if the default `orchestrator.db` is not suitable. For Docker, configure `PUBLIC_DOMAIN` and `TLS_DIRECTORY` with the installed certificate as described in [Helsinki deployment](deployment-helsinki.md), then start the service with `docker compose -f deploy/docker/compose.yaml up -d --build`; the named `orchestrator-data` volume is required for restart persistence.
 
 ## Start one helper
 
