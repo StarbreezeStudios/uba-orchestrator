@@ -1,4 +1,19 @@
 services:
+  nginx:
+    image: nginx:stable-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      PUBLIC_DOMAIN: ${PUBLIC_DOMAIN:?Set PUBLIC_DOMAIN to the UI certificate hostname}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ${TLS_DIRECTORY:?Set TLS_DIRECTORY to the certificate directory}:/etc/nginx/tls:ro
+    depends_on:
+      uba-orchestrator:
+        condition: service_healthy
+
   uba-orchestrator:
     build:
       context: ../..
