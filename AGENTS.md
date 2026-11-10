@@ -11,3 +11,5 @@
 - When code changes are made, propose an English commit message in the final response.
 - Prefer the standard library for the MVP unless a dependency is already declared in `requirements.txt`.
 - Every new endpoint or protocol change must be documented and covered by a test where practical.
+
+- For orchestrator deployment TLS, read the certificate chain and matching private key from `/mnt/devops/resources/ssl/2026/star_starbreeze_com.pem` and `star_starbreeze_com.key` on the selected Jenkins node. Preserve certificate validation and installation outside the checkout with restricted permissions; do not reintroduce the Jenkins TLS archive credential.

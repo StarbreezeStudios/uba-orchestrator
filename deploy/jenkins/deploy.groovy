@@ -29,32 +29,21 @@ pipeline {
 
         stage('Install TLS certificate') {
             steps {
-                withCredentials([file(credentialsId: 'cdf92e2d-5e82-4075-a898-20a1ac3d3532', variable: 'STARBREEZE_TLS_CERTS_ARCHIVE')]) {
-                    sh '''#!/usr/bin/env bash
-                        set -euo pipefail
-                        tls_staging_directory=$(mktemp -d)
-                        chmod 0700 "$tls_staging_directory"
-                        trap 'rm -rf "$tls_staging_directory"' EXIT
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+                    certificate_file="/mnt/devops/resources/ssl/2026/star_starbreeze_com.pem"
+                    key_file="/mnt/devops/resources/ssl/2026/star_starbreeze_com.key"
+                    openssl x509 -in "$certificate_file" -noout -checkhost "$PUBLIC_DOMAIN"
+                    openssl x509 -in "$certificate_file" -noout -checkend 0
+                    openssl pkey -in "$key_file" -noout
+                    certificate_public_key=$(openssl x509 -in "$certificate_file" -noout -pubkey | openssl pkey -pubin -outform DER | openssl sha256)
+                    private_key_public_key=$(openssl pkey -in "$key_file" -pubout -outform DER | openssl sha256)
+                    test "$certificate_public_key" = "$private_key_public_key"
 
-                        tar -xzf "$STARBREEZE_TLS_CERTS_ARCHIVE" \
-                            --no-same-owner --no-same-permissions \
-                            -C "$tls_staging_directory" \
-                            starbreeze/starbreeze.com.pem starbreeze/starbreeze.com.key
-
-                        certificate_file="$tls_staging_directory/starbreeze/starbreeze.com.pem"
-                        key_file="$tls_staging_directory/starbreeze/starbreeze.com.key"
-                        openssl x509 -in "$certificate_file" -noout -checkhost "$PUBLIC_DOMAIN"
-                        openssl x509 -in "$certificate_file" -noout -checkend 0
-                        openssl pkey -in "$key_file" -noout
-                        certificate_public_key=$(openssl x509 -in "$certificate_file" -noout -pubkey | openssl pkey -pubin -outform DER | openssl sha256)
-                        private_key_public_key=$(openssl pkey -in "$key_file" -pubout -outform DER | openssl sha256)
-                        test "$certificate_public_key" = "$private_key_public_key"
-
-                        install -d -m 0700 "$TLS_DIRECTORY"
-                        install -m 0644 "$certificate_file" "$TLS_DIRECTORY/starbreeze.com.pem"
-                        install -m 0600 "$key_file" "$TLS_DIRECTORY/starbreeze.com.key"
-                    '''
-                }
+                    install -d -m 0700 "$TLS_DIRECTORY"
+                    install -m 0644 "$certificate_file" "$TLS_DIRECTORY/starbreeze.com.pem"
+                    install -m 0600 "$key_file" "$TLS_DIRECTORY/starbreeze.com.key"
+                '''
             }
         }
 
