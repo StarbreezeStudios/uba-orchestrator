@@ -1,18 +1,23 @@
 from __future__ import annotations
 
 import sqlite3
+import fcntl
+import logging
 import json
 from collections import deque
 from copy import deepcopy
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
-from threading import RLock
+from threading import Condition, Event, RLock, Thread
 from uuid import uuid4
 
 
 HELPER_OFFLINE_AFTER = timedelta(seconds=15)
 LEASE_DURATION = timedelta(seconds=30)
 TERMINAL_LEASE_STATES = ("released", "expired")
+PERSIST_INTERVAL = 5.0
+MAX_PENDING_HISTORY = 1000
+logger = logging.getLogger(__name__)
 
 
 def now() -> datetime:
@@ -54,37 +59,131 @@ class Lease:
 
 
 class Store:
-    """Thread-safe orchestration state with optional SQLite durability.
+    """Single-coordinator memory state with best-effort periodic SQLite snapshots."""
 
-    ``db_path=None`` retains the in-memory behavior used by isolated unit tests.
-    A file path enables durable state and transactional lease allocation.
-    """
-
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(self, db_path: str | None = None, persist_interval: float = PERSIST_INTERVAL) -> None:
+        if persist_interval <= 0:
+            raise ValueError("Persistence interval must be positive")
         self.lock = RLock()
+        self._condition = Condition(self.lock)
+        self._wake = Event()
+        self._stop = Event()
+        self._closed = False
+        self._writer = None
+        self._ownership = None
+        self._connection = None
         self.db_path = db_path
+        self.persist_interval = persist_interval
         self.helpers: dict[str, Helper] = {}
         self.leases: dict[str, Lease] = {}
+        self._history: dict[str, Lease] = {}
+        self._confirmed_helpers: set[str] = set()
+        self._pending_leases: dict[str, Lease] = {}
+        self._persisted_helpers: dict[str, Helper] = {}
+        self._revision = 0
+        self._persisted_revision = 0
+        self._last_persisted: str | None = None
+        self._persistence_error: str | None = None
+        self._dropped_history = 0
         self.events: deque[dict] = deque(maxlen=200)
         self._pending_events: list[dict] = []
         if self.db_path:
-            self._connection = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
-            self._connection.row_factory = sqlite3.Row
-            self._create_schema()
-            self._begin()
-            self._reconcile_restart_locked()
-            self._reap_locked()
-            self._save()
-            self._connection.commit()
-            self._publish_events()
-        else:
-            self._connection = None
+            try:
+                # SQLite is no longer the allocation lock: reject a second coordinator.
+                self._ownership = open(self.db_path + ".lock", "a")
+                fcntl.flock(self._ownership, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                self._connection = sqlite3.connect(self.db_path, timeout=1, check_same_thread=False)
+                self._connection.row_factory = sqlite3.Row
+                self._create_schema()
+                self._load()
+                self._persisted_helpers = deepcopy(self.helpers)
+                self._begin()
+                self._reconcile_restart_locked()
+                self._commit()
+            except BaseException:
+                if self._connection is not None:
+                    self._connection.close()
+                if self._ownership is not None:
+                    self._ownership.close()
+                raise
+            self._writer = Thread(target=self._persist_loop, name="uba-persistence", daemon=True)
+            self._writer.start()
 
-    def close(self) -> None:
+    def close(self, timeout: float = 5.0) -> bool:
+        """Attempt a final snapshot without waiting indefinitely for a stuck disk."""
         with self.lock:
-            if self._connection is not None:
-                self._connection.close()
-                self._connection = None
+            self._closed = True
+        self._stop.set()
+        self._wake.set()
+        if self._writer is not None:
+            self._writer.join(timeout)
+            stopped = not self._writer.is_alive()
+            with self.lock:
+                persisted = self._persisted_revision >= self._revision
+            if not stopped or not persisted:
+                logger.warning("Shutdown left unpersisted runtime state")
+            return stopped and persisted
+        return True
+
+    def flush(self, timeout: float = 5.0) -> bool:
+        """Request persistence and wait at most timeout; never used by request handlers."""
+        with self._condition:
+            target = self._revision
+            if not self.db_path:
+                return True
+            self._wake.set()
+            return self._condition.wait_for(lambda: self._persisted_revision >= target, timeout)
+
+    def persistence_status(self) -> dict:
+        with self.lock:
+            return {"enabled": bool(self.db_path), "pending": bool(self.db_path) and self._revision > self._persisted_revision,
+                    "pending_leases": len(self._pending_leases), "last_success": self._last_persisted,
+                    "error": self._persistence_error, "dropped_history": self._dropped_history}
+
+    def _persist_loop(self) -> None:
+        try:
+            while True:
+                self._wake.wait(self.persist_interval)
+                self._wake.clear()
+                # Capture shutdown before the snapshot so a stop during a write gets a final pass.
+                stopping = self._stop.is_set()
+                try:
+                    self._persist_once()
+                except Exception as error:
+                    with self.lock:
+                        self._persistence_error = type(error).__name__
+                    logger.exception("Background persistence failed; runtime state remains in memory")
+                if stopping:
+                    return
+        finally:
+            # Only the writer touches SQLite after startup, including during shutdown.
+            self._connection.close()
+            self._ownership.close()
+
+    def _persist_once(self) -> None:
+        with self.lock:
+            if self._revision == self._persisted_revision:
+                return
+            revision = self._revision
+            helpers = deepcopy(self.helpers)
+            leases = deepcopy(self._pending_leases)
+        # No disk operation may hold the runtime lock.
+        try:
+            self._connection.execute("BEGIN IMMEDIATE")
+            self._save(helpers, leases)
+            self._connection.commit()
+        except Exception:
+            self._connection.rollback()
+            raise
+        with self._condition:
+            self._persisted_helpers = helpers
+            for lease_id, lease in leases.items():
+                if self._pending_leases.get(lease_id) == lease:
+                    del self._pending_leases[lease_id]
+            self._persisted_revision = revision
+            self._last_persisted = now().isoformat()
+            self._persistence_error = None
+            self._condition.notify_all()
 
     def _create_schema(self) -> None:
         assert self._connection is not None
@@ -145,40 +244,35 @@ class Store:
                 last_seen=parse_datetime(row["last_seen"]), lease_id=row["lease_id"],
                 agent_ready=bool(row["agent_ready"]),
             )
-        for row in self._connection.execute("SELECT * FROM leases WHERE state NOT IN ('released', 'expired')"):
-            self.leases[row["lease_id"]] = self._lease_from_row(row)
-        self._stored_helpers = deepcopy(self.helpers)
-        self._stored_leases = deepcopy(self.leases)
-
-    def _lease_from_row(self, row: sqlite3.Row) -> Lease:
-        helper_ids = [item["helper_id"] for item in self._connection.execute(
-            "SELECT helper_id FROM lease_helpers WHERE lease_id = ? ORDER BY rowid", (row["lease_id"],))]
-        return Lease(
-            lease_id=row["lease_id"], initiator_id=row["initiator_id"],
-            initiator_address=row["initiator_address"], initiator_port=row["initiator_port"],
-            target_core_count=row["target_core_count"], helper_ids=helper_ids,
-            state=row["state"], expires_at=parse_datetime(row["expires_at"]),
-            last_seen=parse_datetime(row["last_seen"]),
-        )
+        memberships: dict[str, list[str]] = {}
+        for row in self._connection.execute("SELECT lease_id, helper_id FROM lease_helpers ORDER BY rowid"):
+            memberships.setdefault(row["lease_id"], []).append(row["helper_id"])
+        for row in self._connection.execute("SELECT * FROM leases"):
+            lease = Lease(
+                lease_id=row["lease_id"], initiator_id=row["initiator_id"],
+                initiator_address=row["initiator_address"], initiator_port=row["initiator_port"],
+                target_core_count=row["target_core_count"], helper_ids=memberships.get(row["lease_id"], []),
+                state=row["state"], expires_at=parse_datetime(row["expires_at"]),
+                last_seen=parse_datetime(row["last_seen"]),
+            )
+            destination = self._history if lease.state in TERMINAL_LEASE_STATES else self.leases
+            destination[lease.lease_id] = lease
 
     def _get_lease(self, lease_id: str) -> Lease:
-        # Historical leases remain queryable without entering the heartbeat working set.
-        if lease_id not in self.leases and self._connection is not None:
-            row = self._connection.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
-            if row is not None:
-                self.leases[lease_id] = self._lease_from_row(row)
-                self._stored_leases[lease_id] = deepcopy(self.leases[lease_id])
+        # Historical requests also avoid disk I/O and do not scan the full archive.
+        if lease_id not in self.leases:
+            lease = self._history[lease_id]
+            self._before_leases[lease_id] = deepcopy(lease)
+            self.leases[lease_id] = deepcopy(lease)
         return self.leases[lease_id]
 
-    def _save(self) -> None:
-        if self._connection is None:
-            return
-        removed = [(helper_id,) for helper_id in self._stored_helpers.keys() - self.helpers.keys()]
+    def _save(self, helpers: dict[str, Helper], leases: dict[str, Lease]) -> None:
+        removed = [(helper_id,) for helper_id in self._persisted_helpers.keys() - helpers.keys()]
         # Duplicate registration also removes references from retained historical leases.
         self._connection.executemany("DELETE FROM lease_helpers WHERE helper_id = ?", removed)
         self._connection.executemany("DELETE FROM helpers WHERE helper_id = ?", removed)
-        for helper in self.helpers.values():
-            if helper == self._stored_helpers.get(helper.helper_id):
+        for helper in helpers.values():
+            if helper == self._persisted_helpers.get(helper.helper_id):
                 continue
             self._connection.execute(
                 """INSERT INTO helpers
@@ -195,10 +289,7 @@ class Store:
                  helper.platform, helper.uba_version, helper.listen_port, int(helper.enabled), helper.state,
                  helper.last_seen.isoformat(), helper.lease_id, int(helper.agent_ready)),
             )
-        for lease in self.leases.values():
-            previous = self._stored_leases.get(lease.lease_id)
-            if lease == previous:
-                continue
+        for lease in leases.values():
             self._connection.execute(
                 """INSERT INTO leases VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                    ON CONFLICT(lease_id) DO UPDATE SET
@@ -208,31 +299,59 @@ class Store:
                 (lease.lease_id, lease.initiator_id, lease.initiator_address, lease.initiator_port,
                  lease.target_core_count, lease.state, lease.expires_at.isoformat(), lease.last_seen.isoformat()),
             )
-            if previous is None or lease.helper_ids != previous.helper_ids:
+            previous_members = [row[0] for row in self._connection.execute(
+                "SELECT helper_id FROM lease_helpers WHERE lease_id = ? ORDER BY rowid", (lease.lease_id,))]
+            members = [helper_id for helper_id in lease.helper_ids if helper_id in helpers]
+            if members != previous_members:
                 self._connection.execute("DELETE FROM lease_helpers WHERE lease_id = ?", (lease.lease_id,))
                 self._connection.executemany("INSERT INTO lease_helpers VALUES (?, ?)",
-                                             [(lease.lease_id, helper_id) for helper_id in lease.helper_ids])
+                                             [(lease.lease_id, helper_id) for helper_id in members])
 
     def _begin(self) -> None:
-        if self._connection is not None:
-            self._connection.execute("BEGIN IMMEDIATE")
-            try:
-                self._load()
-            except Exception:
-                self._connection.rollback()
-                raise
+        if self._closed:
+            raise RuntimeError("Store is closed")
+        self._before_helpers = deepcopy(self.helpers)
+        self._before_confirmed_helpers = self._confirmed_helpers.copy()
+        self._before_leases = deepcopy(self.leases)
 
     def _commit(self) -> None:
-        if self._connection is not None:
-            self._save()
-            self._connection.commit()
+        changed = self.helpers != self._before_helpers
+        removed = self._before_helpers.keys() - self.helpers.keys()
+        if removed:
+            self._confirmed_helpers.difference_update(removed)
+            for lease_id, lease in self._history.items():
+                if removed.intersection(lease.helper_ids):
+                    lease = deepcopy(lease)
+                    lease.helper_ids = [h for h in lease.helper_ids if h not in removed]
+                    self._history[lease_id] = lease
+        for lease_id, lease in list(self.leases.items()):
+            if lease != self._before_leases.get(lease_id):
+                changed = True
+                if self.db_path:
+                    self._pending_leases[lease_id] = deepcopy(lease)
+            if lease.state in TERMINAL_LEASE_STATES:
+                self._history[lease_id] = lease
+                del self.leases[lease_id]
+        # Coalesce repeated heartbeats; drop only excess unpersisted terminal history.
+        excess = sum(l.state in TERMINAL_LEASE_STATES for l in self._pending_leases.values()) - MAX_PENDING_HISTORY
+        if excess > 0:
+            for lease_id, lease in list(self._pending_leases.items()):
+                if lease.state in TERMINAL_LEASE_STATES:
+                    del self._pending_leases[lease_id]
+                    self._dropped_history += 1
+                    excess -= 1
+                    if not excess:
+                        break
+        if changed:
+            self._revision += 1
         self._publish_events()
 
     def _rollback(self) -> None:
         self._pending_events.clear()
-        if self._connection is not None:
-            self._connection.rollback()
-            self._load()
+        self.helpers = self._before_helpers
+        self._confirmed_helpers = self._before_confirmed_helpers
+        self.leases = {key: lease for key, lease in self._before_leases.items()
+                       if lease.state not in TERMINAL_LEASE_STATES}
 
     def _event(self, event: str, message: str, level: str = "INFO", **details) -> None:
         self._pending_events.append({"timestamp": now().isoformat(), "level": level,
@@ -284,18 +403,15 @@ class Store:
         return changed
 
     def _reconcile_restart_locked(self) -> None:
-        """Invalidate runtime assignments that cannot survive a service restart."""
+        """Require fresh helper contact and invalidate all pre-restart assignments."""
         for lease in self.leases.values():
-            if lease.state in TERMINAL_LEASE_STATES:
-                continue
             lease.state = "expired"
             self._lease_event("lease_expired", lease, "Lease expired after coordinator restart",
                               level="WARNING", reason="coordinator_restart")
-            for helper in self.helpers.values():
-                if helper.lease_id == lease.lease_id:
-                    helper.lease_id = None
-                    helper.state = "idle" if helper.enabled else "disabled"
-                    helper.agent_ready = False
+        for helper in self.helpers.values():
+            helper.lease_id = None
+            helper.state = "offline" if helper.enabled else "disabled"
+            helper.agent_ready = False
 
     def reap(self) -> None:
         with self.lock:
@@ -346,6 +462,7 @@ class Store:
                         helper.state = "idle"
                         self._event("helper_recovered", "Helper reconnected", helpers=[helper.hostname],
                                     helper_id=helper_id)
+                self._confirmed_helpers.add(helper.helper_id)
                 self._commit()
                 return helper
             except Exception:
@@ -373,6 +490,7 @@ class Store:
                     if lease.state != "active":
                         self._lease_event("lease_active", lease, "Lease activated")
                     lease.state = "active"
+                self._confirmed_helpers.add(helper.helper_id)
                 self._commit()
                 return helper
             except Exception:
@@ -457,7 +575,11 @@ class Store:
                 helper = self.helpers[helper_id]
                 helper.enabled = enabled
                 if enabled:
-                    helper.state = "idle" if now() - helper.last_seen <= HELPER_OFFLINE_AFTER else "offline"
+                    if helper.lease_id:
+                        helper.state = "active" if helper.agent_ready else "reserved"
+                    else:
+                        helper.state = "idle" if (helper_id in self._confirmed_helpers and
+                                                  now() - helper.last_seen <= HELPER_OFFLINE_AFTER) else "offline"
                 elif helper.lease_id:
                     helper.state = "draining"
                 else:
