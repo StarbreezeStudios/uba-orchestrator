@@ -13,3 +13,4 @@
 - Every new endpoint or protocol change must be documented and covered by a test where practical.
 
 - For orchestrator deployment TLS, read the certificate chain and matching private key from `/mnt/devops/resources/ssl/2026/star_starbreeze_com.pem` and `star_starbreeze_com.key` on the selected Jenkins node. Preserve certificate validation and installation outside the checkout with restricted permissions; do not reintroduce the Jenkins TLS archive credential.
+- Keep SQLite heartbeat and query work independent of terminal lease history: load indexed nonterminal leases, look up historical leases by ID, and persist only changed rows and memberships. Retain `BEGIN IMMEDIATE` allocation exclusion and rollback behavior. Validate persistence changes against an untouched local database snapshot and concurrent loopback HTTP traffic; never load-test production.

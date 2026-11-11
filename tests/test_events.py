@@ -69,7 +69,8 @@ class EventTests(unittest.TestCase):
         self.lease()
         helper.last_seen -= timedelta(seconds=16)
         self.store.reap()
-        self.assertEqual(self.store.list_events(1)[0]["event"], "helper_offline")
+        self.assertEqual([event["event"] for event in self.store.list_events(2)],
+                         ["lease_expired", "helper_offline"])
         self.store.heartbeat_helper(helper.helper_id, {"agent_ready": False})
         self.assertEqual(self.store.list_events(1)[0]["event"], "helper_recovered")
         lease = self.lease()

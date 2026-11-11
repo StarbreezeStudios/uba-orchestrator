@@ -112,7 +112,6 @@ class StoreTests(unittest.TestCase):
             database = str(Path(directory) / "orchestrator.db")
             store = Store(database)
             helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
-            store._connection.execute("ALTER TABLE helpers ADD COLUMN enabled INTEGER NOT NULL DEFAULT 1")
             store._connection.execute("UPDATE helpers SET enabled = 0 WHERE helper_id = ?", (helper.helper_id,))
             store._connection.commit()
             store.close()
@@ -360,7 +359,8 @@ class StoreTests(unittest.TestCase):
 
             self.assertEqual(registered.helper_id, current.helper_id)
             self.assertNotIn(old.helper_id, store.helpers)
-            self.assertNotIn(old.helper_id, store.leases[lease.lease_id].helper_ids)
+            self.assertNotIn(old.helper_id, [helper["helper_id"]
+                                            for helper in store.lease_view(lease.lease_id)["helpers"]])
             store.close()
 
     def test_helper_registration_reuses_unleased_helper_when_address_changes(self):

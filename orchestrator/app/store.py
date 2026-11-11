@@ -71,7 +71,7 @@ class Store:
             self._connection = sqlite3.connect(self.db_path, timeout=30, check_same_thread=False)
             self._connection.row_factory = sqlite3.Row
             self._create_schema()
-            self._load()
+            self._begin()
             self._reconcile_restart_locked()
             self._reap_locked()
             self._save()
@@ -122,6 +122,9 @@ class Store:
                 helper_id TEXT NOT NULL REFERENCES helpers(helper_id),
                 PRIMARY KEY (lease_id, helper_id)
             );
+            CREATE INDEX IF NOT EXISTS leases_nonterminal ON leases(lease_id)
+                WHERE state NOT IN ('released', 'expired');
+            CREATE INDEX IF NOT EXISTS lease_helpers_helper ON lease_helpers(helper_id);
             """
         )
         columns = {row["name"] for row in self._connection.execute("PRAGMA table_info(helpers)")}
@@ -142,27 +145,41 @@ class Store:
                 last_seen=parse_datetime(row["last_seen"]), lease_id=row["lease_id"],
                 agent_ready=bool(row["agent_ready"]),
             )
-        helper_ids: dict[str, list[str]] = {}
-        for row in self._connection.execute("SELECT lease_id, helper_id FROM lease_helpers ORDER BY rowid"):
-            helper_ids.setdefault(row["lease_id"], []).append(row["helper_id"])
-        for row in self._connection.execute("SELECT * FROM leases"):
-            self.leases[row["lease_id"]] = Lease(
-                lease_id=row["lease_id"], initiator_id=row["initiator_id"],
-                initiator_address=row["initiator_address"], initiator_port=row["initiator_port"],
-                target_core_count=row["target_core_count"], helper_ids=helper_ids.get(row["lease_id"], []),
-                state=row["state"], expires_at=parse_datetime(row["expires_at"]),
-                last_seen=parse_datetime(row["last_seen"]),
-            )
+        for row in self._connection.execute("SELECT * FROM leases WHERE state NOT IN ('released', 'expired')"):
+            self.leases[row["lease_id"]] = self._lease_from_row(row)
+        self._stored_helpers = deepcopy(self.helpers)
+        self._stored_leases = deepcopy(self.leases)
+
+    def _lease_from_row(self, row: sqlite3.Row) -> Lease:
+        helper_ids = [item["helper_id"] for item in self._connection.execute(
+            "SELECT helper_id FROM lease_helpers WHERE lease_id = ? ORDER BY rowid", (row["lease_id"],))]
+        return Lease(
+            lease_id=row["lease_id"], initiator_id=row["initiator_id"],
+            initiator_address=row["initiator_address"], initiator_port=row["initiator_port"],
+            target_core_count=row["target_core_count"], helper_ids=helper_ids,
+            state=row["state"], expires_at=parse_datetime(row["expires_at"]),
+            last_seen=parse_datetime(row["last_seen"]),
+        )
+
+    def _get_lease(self, lease_id: str) -> Lease:
+        # Historical leases remain queryable without entering the heartbeat working set.
+        if lease_id not in self.leases and self._connection is not None:
+            row = self._connection.execute("SELECT * FROM leases WHERE lease_id = ?", (lease_id,)).fetchone()
+            if row is not None:
+                self.leases[lease_id] = self._lease_from_row(row)
+                self._stored_leases[lease_id] = deepcopy(self.leases[lease_id])
+        return self.leases[lease_id]
 
     def _save(self) -> None:
         if self._connection is None:
             return
-        self._connection.execute("DELETE FROM lease_helpers")
-        self._connection.execute("DELETE FROM leases")
-        stored_ids = {row["helper_id"] for row in self._connection.execute("SELECT helper_id FROM helpers")}
-        self._connection.executemany("DELETE FROM helpers WHERE helper_id = ?",
-                                     [(helper_id,) for helper_id in stored_ids - self.helpers.keys()])
+        removed = [(helper_id,) for helper_id in self._stored_helpers.keys() - self.helpers.keys()]
+        # Duplicate registration also removes references from retained historical leases.
+        self._connection.executemany("DELETE FROM lease_helpers WHERE helper_id = ?", removed)
+        self._connection.executemany("DELETE FROM helpers WHERE helper_id = ?", removed)
         for helper in self.helpers.values():
+            if helper == self._stored_helpers.get(helper.helper_id):
+                continue
             self._connection.execute(
                 """INSERT INTO helpers
                    (helper_id, hostname, address, cores, memory_bytes, platform, uba_version,
@@ -179,18 +196,31 @@ class Store:
                  helper.last_seen.isoformat(), helper.lease_id, int(helper.agent_ready)),
             )
         for lease in self.leases.values():
+            previous = self._stored_leases.get(lease.lease_id)
+            if lease == previous:
+                continue
             self._connection.execute(
-                "INSERT INTO leases VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                """INSERT INTO leases VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(lease_id) DO UPDATE SET
+                    initiator_id=excluded.initiator_id, initiator_address=excluded.initiator_address,
+                    initiator_port=excluded.initiator_port, target_core_count=excluded.target_core_count,
+                    state=excluded.state, expires_at=excluded.expires_at, last_seen=excluded.last_seen""",
                 (lease.lease_id, lease.initiator_id, lease.initiator_address, lease.initiator_port,
                  lease.target_core_count, lease.state, lease.expires_at.isoformat(), lease.last_seen.isoformat()),
             )
-            for helper_id in lease.helper_ids:
-                self._connection.execute("INSERT INTO lease_helpers VALUES (?, ?)", (lease.lease_id, helper_id))
+            if previous is None or lease.helper_ids != previous.helper_ids:
+                self._connection.execute("DELETE FROM lease_helpers WHERE lease_id = ?", (lease.lease_id,))
+                self._connection.executemany("INSERT INTO lease_helpers VALUES (?, ?)",
+                                             [(lease.lease_id, helper_id) for helper_id in lease.helper_ids])
 
     def _begin(self) -> None:
         if self._connection is not None:
             self._connection.execute("BEGIN IMMEDIATE")
-            self._load()
+            try:
+                self._load()
+            except Exception:
+                self._connection.rollback()
+                raise
 
     def _commit(self) -> None:
         if self._connection is not None:
@@ -354,7 +384,7 @@ class Store:
             self._begin()
             try:
                 self._reap_locked()
-                lease = self.leases[lease_id]
+                lease = self._get_lease(lease_id)
                 if lease.state not in TERMINAL_LEASE_STATES:
                     lease.last_seen = now()
                     lease.expires_at = lease.last_seen + LEASE_DURATION
@@ -405,7 +435,7 @@ class Store:
         with self.lock:
             self._begin()
             try:
-                lease = self.leases[lease_id]
+                lease = self._get_lease(lease_id)
                 if lease.state not in TERMINAL_LEASE_STATES:
                     self._lease_event("lease_released", lease, "Lease explicitly released", reason="explicit_release")
                 lease.state = "released"
@@ -444,7 +474,7 @@ class Store:
             self._begin()
             try:
                 self._reap_locked()
-                lease = self.leases[lease_id]
+                lease = self._get_lease(lease_id)
                 helpers = [self.helpers[i] for i in lease.helper_ids]
                 self._commit()
                 return {"lease_id": lease.lease_id, "state": lease.state, "expires_at": lease.expires_at.isoformat(),
