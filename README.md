@@ -38,4 +38,6 @@ When the service is running, open `/ui` for the local operations dashboard. It s
 
 SQLite persistence and restart reconciliation are now implemented. A service restart retains helper and lease records; stale helpers and expired leases are reconciled on startup. The service still assumes a single orchestrator instance.
 
+Persistence loads only nonterminal leases for routine transactions and writes changed records and memberships. Terminal leases remain in SQLite and are loaded by ID when requested; no history is pruned. Existing databases receive indexes on startup. See [persistence validation](docs/persistence-validation.md) for regression tests and concurrent HTTP validation against a local snapshot.
+
 The Jenkins helper deployment installs `UbaOrchestratorHelper` as a machine-level Scheduled Task that starts at Windows boot and restarts the helper supervisor after failures.
