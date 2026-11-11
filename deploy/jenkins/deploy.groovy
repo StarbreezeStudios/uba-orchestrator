@@ -1,13 +1,5 @@
 pipeline {
-    agent { label "${params.node_name}" }
-
-    parameters {
-        choice(
-            name: 'node_name',
-            choices: ['uba-orchestrator-dev', 'uba-orchestrator'],
-            description: 'Target node name'
-        )
-    }
+    agent { label 'uba-orchestrator' }
 
     options {
         timestamps()
@@ -16,7 +8,7 @@ pipeline {
     }
 
     environment {
-        PUBLIC_DOMAIN = "${params.node_name}.starbreeze.com"
+        PUBLIC_DOMAIN = 'uba-orchestrator.starbreeze.com'
         TLS_DIRECTORY = '/home/jkoperator/jenkins-tls/uba-orchestrator'
     }
 
