@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
+from asyncio import to_thread
 from html import escape
 
 from .store import Store
@@ -15,11 +17,18 @@ except ImportError:  # The pure store remains testable without optional server d
 store = Store(os.environ.get("UBA_ORCHESTRATOR_DB", "orchestrator.db"))
 
 if FastAPI is not None:
-    app = FastAPI(title="UBA Orchestrator", version="0.1.0")
+    @asynccontextmanager
+    async def lifespan(app):
+        try:
+            yield
+        finally:
+            await to_thread(store.close)
+
+    app = FastAPI(title="UBA Orchestrator", version="0.1.0", lifespan=lifespan)
 
     @app.get("/api/v1/health")
-    def health() -> dict:
-        return {"status": "ok"}
+    async def health() -> dict:
+        return {"status": "ok", "persistence": store.persistence_status()}
 
     @app.get("/", include_in_schema=False)
     def root() -> RedirectResponse:

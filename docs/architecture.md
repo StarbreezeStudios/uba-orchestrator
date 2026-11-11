@@ -5,7 +5,7 @@ This document describes the first two-machine implementation for this checkout o
 ## Components
 
 * `coordinator-bridge/` is a small native coordinator DLL. It implements the exact `uba::Coordinator` interface and uses WinHTTP to call the Python service. The service URL is supplied through `UBA_ORCHESTRATOR_URL`; the existing host configuration maps its `Coordinator.Uri` value to `UE_HORDE_URL`, which the bridge also accepts for compatibility. `src/UbaCoordinatorOrchestrator/` is the UBT-discoverable module wrapper for this source.
-* `orchestrator/` is a FastAPI service. It uses SQLite by default and keeps the in-memory dictionaries as a loaded working set. Mutations are committed transactionally to the SQLite database.
+* `orchestrator/` is a FastAPI service. It coordinates from authoritative in-memory state and periodically saves changed records to SQLite through one background writer. Request completion does not wait for disk persistence.
 * `helper-agent/` registers a Windows helper, polls its heartbeat, starts `UbaAgent.exe -listen=<port>`, and reports readiness.
 
 The native source is intentionally separate from Epic source. The UBT target file is `src/UbaCoordinatorOrchestrator.Target.cs`; the bridge module should be placed in the UBA program source tree when this checkout is integrated into the full Engine tree.
@@ -44,18 +44,20 @@ The MVP endpoints are:
 * `POST /api/v1/leases/{lease_id}/heartbeat`: initiator heartbeat that extends the lease expiry.
 * `GET /api/v1/leases/{lease_id}`: state and selected helper endpoints.
 * `DELETE /api/v1/leases/{lease_id}`: release reservation.
-* `GET /api/v1/health`: liveness.
+* `GET /api/v1/health`: runtime liveness with persistence lag/error diagnostics; see [persistence validation](persistence-validation.md).
 * `GET /api/v1/events?limit=200`: recent committed coordinator events, newest first. `limit` defaults to 200 and must be an integer from 1 to 200; invalid values return HTTP 422.
 
 ## Recent events
 
-The coordinator retains up to 200 events in a process-local memory buffer and emits each event as a JSON line to stdout after the operation commits. Failed transactions do not publish their pending events. The buffer is cleared on restart; startup reconciliation may immediately add new lease-expiration events. Docker log retention determines how long stdout history remains available.
+The coordinator retains up to 200 events in a process-local memory buffer and emits each event as a JSON line to stdout after the in-memory operation succeeds. Failed runtime operations do not publish their pending events; background persistence failures do not undo successful runtime events. The buffer is cleared on restart; startup reconciliation may immediately add new lease-expiration events. Docker log retention determines how long stdout history remains available.
 
 Each event contains `timestamp` (UTC ISO 8601), `level`, `event`, and `message`. Context fields include `initiator_id`, `helpers` (hostnames), `helper_id`, `lease_id`, `requested_cores`, `assigned_cores`, `available_cores`, `address`, `cores`, and `reason` where applicable. Expiration reasons are `helper_lost`, `initiator_timeout`, and `coordinator_restart`.
 
 Events cover capacity requests and rejections, lease creation/activation/release/expiration, helper registration/recovery/heartbeat timeout, and enable/disable changes. Routine heartbeats are not logged. Repeated capacity requests are separate events and can fill the bounded history during prolonged capacity shortages. The dashboard refreshes the latest 200 events every three seconds and links node names to Jenkins. This history is diagnostic, not a durable audit trail, and assumes the existing single-process deployment.
 
 Lease states are `pending`, `active`, `released`, and `expired`. Helper states are `idle`, `reserved`, `active`, and `offline`. The initiator state is represented by the lease: pending until a helper reports readiness, active while heartbeats continue, and released/expired after completion or timeout.
+
+Re-enabling a helper with an existing reservation restores `reserved` or `active` according to its readiness and preserves its lease. It does not become idle until that lease is released or expires. Repeating an enable request on an already enabled helper follows the same rule.
 
 ## Timeouts and errors
 
@@ -68,9 +70,9 @@ Lease states are `pending`, `active`, `released`, and `expired`. Helper states a
 
 ## State persistence requirement
 
-The orchestrator stores helpers, leases, lease-helper relationships, heartbeats, and expiry timestamps in SQLite. The database path is configured with `UBA_ORCHESTRATOR_DB`; Docker uses `/var/lib/uba-orchestrator/orchestrator.db` on the `orchestrator-data` volume.
+The orchestrator keeps helpers, leases, lease-helper relationships, heartbeats, and expiry timestamps in memory, and saves changed records to SQLite every five seconds in the background. The database path is configured with `UBA_ORCHESTRATOR_DB`; Docker uses `/var/lib/uba-orchestrator/orchestrator.db` on the `orchestrator-data` volume.
 
-On startup, all non-terminal leases are marked `expired` because their runtime connections cannot be restored safely, and their helpers are released. Stale helpers are marked `offline`; a heartbeat from a still-running helper revives it to `idle`, allowing the helper supervisor to receive a fresh lease. Initiators detect the expired lease and create a new one. Helper registration remains idempotent. Lease allocation uses an SQLite write transaction so concurrent allocators cannot reserve the same helper. This implementation is intended for one orchestrator instance; PostgreSQL and an explicit multi-instance locking strategy are still required for high availability.
+On startup, all non-terminal leases are marked `expired` because their runtime connections cannot be restored safely, and their helpers are released. Enabled helpers are marked `offline` regardless of their saved timestamp; fresh registration or a heartbeat from a still-running helper revives them to `idle`, allowing the helper supervisor to receive a fresh lease. Initiators detect the expired lease and create a new one. Helper registration remains idempotent. Lease allocation uses the single coordinator's memory lock so concurrent requests cannot reserve the same helper. Exactly one process/worker must run; a file lock rejects another coordinator using the same database path. Unpersisted changes can be lost on failure, and pending terminal-history writes are bounded. See [persistence validation](persistence-validation.md) for recovery semantics, limits and fault-injection results.
 * Authentication, multiple pools, priorities, durable state, dashboard, and multi-initiator fairness are intentionally out of scope for this MVP.
 
 ## Open questions

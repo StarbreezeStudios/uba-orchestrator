@@ -5,6 +5,7 @@ import hashlib
 import json
 import os
 import socket
+import signal
 import sqlite3
 import subprocess
 import sys
@@ -61,10 +62,48 @@ def validate(args):
                 return json.loads(body) if "application/json" in response.headers.get("Content-Type", "") else None
 
         environment = {**os.environ, "UBA_ORCHESTRATOR_DB": str(database), "PYTHONDONTWRITEBYTECODE": "1"}
+        arm = Path(directory) / "arm-storage-fault"
+        entered = Path(directory) / "storage-fault-entered"
+        release = Path(directory) / "release-storage-fault"
+        runner = Path(directory) / "server.py"
+        # Fault injection exists only in this disposable loopback harness.
+        runner.write_text("""
+import sqlite3
+import sys
+import time
+from pathlib import Path
+import uvicorn
+
+app_dir, port, mode, delay, arm, entered, release = sys.argv[1:]
+sys.path.insert(0, app_dir)
+arm, entered, release = Path(arm), Path(entered), Path(release)
+connect = sqlite3.connect
+
+class FaultConnection(sqlite3.Connection):
+    def commit(self):
+        if arm.exists():
+            entered.touch()
+            if mode == "slow":
+                time.sleep(float(delay))
+            elif mode == "blocked":
+                while not release.exists():
+                    time.sleep(.01)
+        return super().commit()
+
+def fault_connect(*args, **kwargs):
+    kwargs["factory"] = FaultConnection
+    return connect(*args, **kwargs)
+
+if mode != "normal":
+    sqlite3.connect = fault_connect
+import app.main
+sqlite3.connect = connect
+uvicorn.run(app.main.app, host="127.0.0.1", port=int(port), access_log=False)
+""")
         with open(Path(directory) / "server.log", "w+") as log:
             process = subprocess.Popen(
-                [sys.executable, "-m", "uvicorn", "app.main:app", "--app-dir", str(args.app_dir),
-                 "--host", "127.0.0.1", "--port", str(port), "--no-access-log"],
+                [sys.executable, str(runner), str(args.app_dir.resolve()), str(port), args.storage_mode,
+                 str(args.commit_delay), str(arm), str(entered), str(release)],
                 env=environment, stdout=log, stderr=log)
             try:
                 deadline = time.monotonic() + 30
@@ -80,6 +119,13 @@ def validate(args):
                 helpers = [request("/api/v1/helpers/register", "POST", {
                     "hostname": f"validation-helper-{i}", "address": "127.0.0.2", "cores": 8,
                 })["helper_id"] for i in range(args.clients // 4)]
+                if args.storage_mode != "normal":
+                    arm.touch()
+                    deadline = time.monotonic() + 15
+                    while not entered.exists():
+                        if process.poll() is not None or time.monotonic() >= deadline:
+                            raise RuntimeError("Storage fault was not exercised")
+                        time.sleep(.01)
                 barrier = threading.Barrier(args.clients)
 
                 def client(index):
@@ -126,10 +172,12 @@ def validate(args):
                 with ThreadPoolExecutor(max_workers=args.clients) as executor:
                     samples = [sample for batch in executor.map(client, range(args.clients)) for sample in batch]
                 elapsed = time.monotonic() - started
+                status_during_fault = request("/api/v1/health")["persistence"]
             finally:
+                release.touch()
                 process.terminate()
                 try:
-                    process.wait(timeout=5)
+                    process.wait(timeout=max(8, args.commit_delay * 2 + 3))
                 except subprocess.TimeoutExpired:
                     process.kill()
                     process.wait()
@@ -142,6 +190,12 @@ def validate(args):
             overlapping = connection.execute(
                 """SELECT helper_id FROM lease_helpers JOIN leases USING (lease_id)
                    WHERE state NOT IN ('released', 'expired') GROUP BY helper_id HAVING count(*) > 1""").fetchall()
+            persisted_validation_leases = connection.execute(
+                "SELECT count(*) FROM leases WHERE initiator_id LIKE 'validation-build-%'"
+            ).fetchone()[0]
+            unfinished = connection.execute(
+                "SELECT count(*) FROM leases WHERE initiator_id LIKE 'validation-build-%' AND state != 'released'"
+            ).fetchone()[0]
             expired = connection.execute(
                 "SELECT count(*) FROM leases WHERE initiator_id LIKE 'validation-build-%' AND state = 'expired'"
             ).fetchone()[0]
@@ -158,15 +212,24 @@ def validate(args):
             durations.sort()
             latency[kind] = {"count": len(durations), "p95_ms": round(durations[int((len(durations) - 1) * .95)] * 1000, 2),
                              "max_ms": round(durations[-1] * 1000, 2)}
-        passed = not errors and preserved and integrity == "ok" and not foreign_keys and not overlapping and not expired
+        allocations = sum(kind == "allocate" and outcome == "ok" for kind, _, outcome in samples)
+        persistence_complete = persisted_validation_leases == allocations
+        fault_exercised = args.storage_mode == "normal" or entered.exists()
+        passed = (not errors and preserved and integrity == "ok" and not foreign_keys and not overlapping
+                  and not unfinished and persistence_complete and fault_exercised
+                  and process.returncode in (0, -signal.SIGTERM))
         report = {"passed": passed, "timestamp_utc": datetime.now(timezone.utc).isoformat(),
                   "original_leases": original_leases, "retained_terminal_leases": len(terminal_ids),
                   "original_helpers": original_helpers, "clients": args.clients, "iterations": args.iterations,
                   "requests": len(samples), "seconds": round(elapsed, 3), "errors": dict(errors),
+                  "storage_mode": args.storage_mode, "commit_delay_seconds": args.commit_delay,
+                  "fault_exercised": fault_exercised, "status_during_fault": status_during_fault,
+                  "server_exit_code": process.returncode, "successful_allocations": allocations,
+                  "persisted_validation_leases": persisted_validation_leases,
                   "capacity_conflicts": sum(outcome == "capacity_conflict" for _, _, outcome in samples),
                   "latency": latency, "terminal_history_preserved": preserved, "integrity": integrity,
                   "foreign_key_violations": len(foreign_keys), "overlapping_assignments": len(overlapping),
-                  "expired_validation_leases": expired}
+                  "expired_validation_leases": expired, "unfinished_validation_leases": unfinished}
         print(json.dumps(report, indent=2))
         if args.output:
             args.output.write_text(json.dumps(report, indent=2) + "\n")
@@ -180,8 +243,10 @@ if __name__ == "__main__":
     parser.add_argument("--clients", type=int, default=64)
     parser.add_argument("--iterations", type=int, default=8)
     parser.add_argument("--timeout", type=float, default=2)
+    parser.add_argument("--storage-mode", choices=("normal", "slow", "blocked"), default="normal")
+    parser.add_argument("--commit-delay", type=float, default=2, help="Delay before each commit in slow mode")
     parser.add_argument("--output", type=Path)
     arguments = parser.parse_args()
-    if arguments.clients < 4 or arguments.clients % 4 or arguments.iterations < 1 or arguments.timeout <= 0:
-        parser.error("clients must be a positive multiple of four; iterations and timeout must be positive")
+    if arguments.clients < 4 or arguments.clients % 4 or arguments.iterations < 1 or arguments.timeout <= 0 or arguments.commit_delay <= 0:
+        parser.error("clients must be a positive multiple of four; iterations, timeout and commit-delay must be positive")
     raise SystemExit(validate(arguments))

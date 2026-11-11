@@ -78,12 +78,12 @@ class EventTests(unittest.TestCase):
         self.store.reap()
         self.assertEqual(self.store.list_events(1)[0]["reason"], "initiator_timeout")
 
-    def test_failed_transaction_is_not_published_and_restart_clears_history(self):
+    def test_failed_runtime_operation_is_not_published_and_restart_clears_events(self):
         with tempfile.TemporaryDirectory() as directory:
             path = str(Path(directory) / "events.db")
             store = Store(path)
             try:
-                with patch.object(store, "_save", side_effect=RuntimeError("write failed")):
+                with patch.object(store, "_event", side_effect=RuntimeError("invalid runtime operation")):
                     with self.assertRaises(RuntimeError):
                         store.register_helper({"hostname": "failed", "address": "10.0.0.1", "cores": 8})
                 self.assertEqual(store.list_events(), [])

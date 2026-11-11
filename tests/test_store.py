@@ -3,6 +3,7 @@ import sqlite3
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 from pathlib import Path
 from unittest.mock import patch
@@ -13,7 +14,7 @@ from app.store import Store, now
 
 
 class StoreTests(unittest.TestCase):
-    def test_stale_lease_is_expired_in_sqlite_without_releasing_replacement(self):
+    def test_stale_lease_is_expired_without_releasing_replacement(self):
         with tempfile.TemporaryDirectory() as directory:
             store = Store(str(Path(directory) / "orchestrator.db"))
             helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 120})
@@ -23,11 +24,11 @@ class StoreTests(unittest.TestCase):
             store.release_lease(original.lease_id)
             replacement = store.create_lease({**request, "initiator_id": "jenkins-2"})
             store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
-            # Reproduce a stale active lease persisted by the previous timeout behavior.
-            store._connection.execute("UPDATE leases SET state = 'active' WHERE lease_id = ?",
-                                      (original.lease_id,))
-            store._connection.commit()
+            # Reproduce a stale active assignment in the authoritative runtime state.
+            original.state = "active"
+            store.leases[original.lease_id] = original
             store.reap()
+            self.assertTrue(store.flush())
             states = dict(store._connection.execute("SELECT lease_id, state FROM leases"))
             self.assertEqual(states[original.lease_id], "expired")
             self.assertEqual(states[replacement.lease_id], "active")
@@ -103,7 +104,7 @@ class StoreTests(unittest.TestCase):
 
             restarted = Store(database)
             self.assertIn(helper.helper_id, restarted.helpers)
-            self.assertIn(lease.lease_id, restarted.leases)
+            self.assertIn(lease.lease_id, restarted._history)
             self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "expired")
             restarted.close()
 
@@ -112,17 +113,18 @@ class StoreTests(unittest.TestCase):
             database = str(Path(directory) / "orchestrator.db")
             store = Store(database)
             helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
-            store._connection.execute("UPDATE helpers SET enabled = 0 WHERE helper_id = ?", (helper.helper_id,))
-            store._connection.commit()
+            store.set_helper_enabled(helper.helper_id, False)
             store.close()
 
             restarted = Store(database)
             self.addCleanup(restarted.close)
             restarted.heartbeat_helper(helper.helper_id, {"agent_port": 1346})
+            self.assertTrue(restarted.flush())
             row = restarted._connection.execute("SELECT enabled, listen_port FROM helpers WHERE helper_id = ?",
                                                  (helper.helper_id,)).fetchone()
             self.assertEqual(tuple(row), (0, 1346))
             new = restarted.register_helper({"hostname": "helper-2", "address": "10.0.0.3", "cores": 16})
+            self.assertTrue(restarted.flush())
             row = restarted._connection.execute("SELECT enabled FROM helpers WHERE helper_id = ?",
                                                  (new.helper_id,)).fetchone()
             self.assertEqual(row["enabled"], 1)
@@ -142,15 +144,10 @@ class StoreTests(unittest.TestCase):
                                         "initiator_port": 1345, "target_core_count": 4})
             store.leases[lease.lease_id].expires_at = store.leases[lease.lease_id].expires_at.replace(year=2020)
             store.helpers[helper.helper_id].last_seen = store.helpers[helper.helper_id].last_seen.replace(year=2020)
-            store._connection.execute("UPDATE leases SET expires_at = ? WHERE lease_id = ?",
-                                      (store.leases[lease.lease_id].expires_at.isoformat(), lease.lease_id))
-            store._connection.execute("UPDATE helpers SET last_seen = ? WHERE helper_id = ?",
-                                      (store.helpers[helper.helper_id].last_seen.isoformat(), helper.helper_id))
-            store._connection.commit()
             store.close()
 
             restarted = Store(database)
-            self.assertEqual(restarted.leases[lease.lease_id].state, "expired")
+            self.assertEqual(restarted.lease_view(lease.lease_id)["state"], "expired")
             self.assertEqual(restarted.helpers[helper.helper_id].state, "offline")
             self.assertIsNone(restarted.helpers[helper.helper_id].lease_id)
             restarted.close()
@@ -161,8 +158,6 @@ class StoreTests(unittest.TestCase):
             store = Store(database)
             helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
             store.helpers[helper.helper_id].state = "offline"
-            store._connection.execute("UPDATE helpers SET state = 'offline' WHERE helper_id = ?", (helper.helper_id,))
-            store._connection.commit()
             store.close()
 
             restarted = Store(database)
@@ -171,28 +166,22 @@ class StoreTests(unittest.TestCase):
             self.assertEqual(restarted.helpers[helper.helper_id].state, "idle")
             restarted.close()
 
-    def test_sqlite_allocation_is_transactionally_exclusive(self):
-        with tempfile.TemporaryDirectory() as directory:
-            database = str(Path(directory) / "orchestrator.db")
-            first = Store(database)
-            first.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
-            second = Store(database)
-            leases = []
+    def test_memory_allocation_is_exclusive(self):
+        store = Store()
+        store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+        leases = []
 
-            def allocate(store, initiator):
-                leases.append(store.create_lease({"initiator_id": initiator, "initiator_address": "10.0.0.1",
-                                                  "initiator_port": 1345, "target_core_count": 8}))
+        def allocate(initiator):
+            leases.append(store.create_lease({"initiator_id": initiator, "initiator_address": "10.0.0.1",
+                                              "initiator_port": 1345, "target_core_count": 8}))
 
-            threads = [threading.Thread(target=allocate, args=(first, "one")),
-                       threading.Thread(target=allocate, args=(second, "two"))]
-            for thread in threads:
-                thread.start()
-            for thread in threads:
-                thread.join()
-
-            self.assertEqual(sum(lease is not None for lease in leases), 1)
-            first.close()
-            second.close()
+        threads = [threading.Thread(target=allocate, args=(str(i),)) for i in range(48)]
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+        self.assertEqual(sum(lease is not None for lease in leases), 1)
+        store.close()
 
     def test_lease_selects_idle_capacity_and_release_returns_helper_to_idle(self):
         store = Store()
@@ -232,6 +221,57 @@ class StoreTests(unittest.TestCase):
         store.release_lease(lease.lease_id)
         self.assertEqual(store.helpers[helper.helper_id].state, "disabled")
         self.assertIsNone(store.helpers[helper.helper_id].lease_id)
+
+    def test_enabling_busy_helper_preserves_reservation_until_release(self):
+        for active in (False, True):
+            for disable_first in (False, True):
+                with self.subTest(active=active, disable_first=disable_first):
+                    store = Store()
+                    self.addCleanup(store.close)
+                    helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+                    request = {"initiator_id": "build-1", "initiator_address": "10.0.0.1",
+                               "initiator_port": 1345, "target_core_count": 8}
+                    lease = store.create_lease(request)
+                    if active:
+                        store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+                    if disable_first:
+                        store.set_helper_enabled(helper.helper_id, False)
+                        self.assertEqual(helper.state, "draining")
+                    store.set_helper_enabled(helper.helper_id, True)
+                    self.assertEqual(helper.state, "active" if active else "reserved")
+                    self.assertEqual(helper.lease_id, lease.lease_id)
+                    self.assertEqual(helper.agent_ready, active)
+                    self.assertIsNone(store.create_lease({**request, "initiator_id": "build-2"}))
+                    self.assertEqual(store.lease_view(lease.lease_id)["state"], "active" if active else "pending")
+                    store.release_lease(lease.lease_id)
+                    replacement = store.create_lease({**request, "initiator_id": "build-2"})
+                    self.assertIsNotNone(replacement)
+                    self.assertEqual(helper.lease_id, replacement.lease_id)
+
+    def test_concurrent_reactivation_does_not_allocate_busy_helper(self):
+        store = Store()
+        self.addCleanup(store.close)
+        helper = store.register_helper({"hostname": "helper-1", "address": "10.0.0.2", "cores": 8})
+        request = {"initiator_id": "original", "initiator_address": "10.0.0.1",
+                   "initiator_port": 1345, "target_core_count": 8}
+        original = store.create_lease(request)
+        store.heartbeat_helper(helper.helper_id, {"agent_ready": True})
+        barrier = threading.Barrier(16)
+
+        def compete(index):
+            barrier.wait(timeout=5)
+            if index % 2:
+                store.set_helper_enabled(helper.helper_id, False)
+                store.set_helper_enabled(helper.helper_id, True)
+                return None
+            return store.create_lease({**request, "initiator_id": f"contender-{index}"})
+
+        with ThreadPoolExecutor(max_workers=16) as executor:
+            results = list(executor.map(compete, range(16)))
+        self.assertTrue(all(lease is None for lease in results))
+        self.assertEqual(helper.lease_id, original.lease_id)
+        self.assertEqual(helper.state, "active")
+        self.assertEqual([lease["lease_id"] for lease in store.list_initiators()], [original.lease_id])
 
     def test_disabled_state_survives_store_recreation(self):
         with tempfile.TemporaryDirectory() as directory:
